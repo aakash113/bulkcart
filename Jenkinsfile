@@ -1,32 +1,36 @@
 pipeline {
     agent any
-
-    tools {
-        nodejs 'node-20'
-    }
+    tools { nodejs 'node-20' }
 
     environment {
-        // Updated syntax to ensure Jenkins binds the secret correctly
         DB_URL = credentials('BULKCART_DB_URL')
+        DOCKER_CREDS = credentials('DOCKER_HUB_CREDS')
+        DOCKER_USER = "your-docker-hub-username"
     }
 
     stages {
-        stage('Sanity Check') {
+        stage('CI: Install & Build') {
             steps {
-                echo 'Checking Environment...'
-                sh 'node -v'
-                // Verification: This will print 'masked' in logs for safety
-                sh 'echo "DB URL is loaded"'
+                parallel {
+                    stage('Backend') { steps { dir('backend') { sh 'npm install && npm run build' } } }
+                    stage('Frontend') { steps { dir('frontend') { sh 'npm install && npm run build' } } }
+                }
             }
         }
 
-        stage('Build & Install') {
+        stage('CD: Package & Deliver') {
             steps {
-                dir('backend') {
-                    sh 'npm install'
-                }
-                dir('frontend') {
-                    sh 'npm install'
+                script {
+                    // Login to Docker Hub
+                    sh "echo ${DOCKER_CREDS_PSW} | docker login -u ${DOCKER_CREDS_USR} --password-stdin"
+
+                    // Build and Push Backend
+                    sh "docker build -t ${DOCKER_USER}/bulkcart-backend:latest ./backend"
+                    sh "docker push ${DOCKER_USER}/bulkcart-backend:latest"
+
+                    // Build and Push Frontend
+                    sh "docker build -t ${DOCKER_USER}/bulkcart-frontend:latest ./frontend"
+                    sh "docker push ${DOCKER_USER}/bulkcart-frontend:latest"
                 }
             }
         }
@@ -34,22 +38,9 @@ pipeline {
 
     post {
         always {
-            // FIX for 'hudson.FilePath is missing'
             script {
-                // Only run cleanWs if a workspace (FilePath) is actually available
-                if (getContext(hudson.FilePath)) {
-                    cleanWs()
-                    echo 'Workspace cleaned successfully.'
-                } else {
-                    echo 'Workspace already removed, skipping cleanWs.'
-                }
+                if (getContext(hudson.FilePath)) { cleanWs() }
             }
-        }
-        success {
-            echo '✅ BulkCart build successful!'
-        }
-        failure {
-            echo '❌ Build failed. Check the Console Output for errors.'
         }
     }
 }
