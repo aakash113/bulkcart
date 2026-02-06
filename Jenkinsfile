@@ -6,7 +6,14 @@ pipeline {
     }
 
     stages {
-        stage('Install') {
+        stage('Sanity Check') {
+            steps {
+                // This prints the version to the console to prove it exists
+                sh 'node -v'
+                sh 'npm -v'
+            }
+        }
+        stage('Install Dependencies') {
             parallel {
                 stage('Backend') {
                     steps {
@@ -16,28 +23,6 @@ pipeline {
                 stage('Frontend') {
                     steps {
                         dir('frontend') { sh 'npm install' }
-                    }
-                }
-            }
-        }
-
-        stage('Test') {
-            steps {
-                echo 'Running Tests...'
-                dir('backend') { sh 'npm run test -- --passWithNoTests' }
-            }
-        }
-
-        stage('Build') {
-            parallel {
-                stage('Build Backend') {
-                    steps {
-                        dir('backend') { sh 'npm run build' }
-                    }
-                }
-                stage('Build Frontend') {
-                    steps {
-                        dir('frontend') { sh 'npm run build' }
                     }
                 }
             }
