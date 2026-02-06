@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     tools {
-        // This MUST match the name in Manage Jenkins > Tools
+        // This MUST match the name in Manage Jenkins > Tools: node-20
         nodejs 'node-20'
     }
 
@@ -10,7 +10,6 @@ pipeline {
         // Inject your database secret from Jenkins Credentials
         // ID: 'BULKCART_DB_URL', Secret Text: your postgres connection string
         DB_URL = credentials('BULKCART_DB_URL')
-        JWT_SECRET = credentials('BULKCART_JWT_SECRET')
     }
 
     stages {
@@ -19,18 +18,6 @@ pipeline {
                 echo 'Checking Environment...'
                 sh 'node -v'
                 sh 'npm -v'
-            }
-        }
-
-        stage('Setup Secrets') {
-            steps {
-                echo 'Injecting environment variables into backend...'
-                dir('backend') {
-                    // Recreates the .env file that is excluded from Git
-                    sh "echo 'PORT=3000' > .env"
-                    sh "echo 'DATABASE_URL=${DB_URL}' >> .env"
-                    sh "echo 'JWT_SECRET=${JWT_SECRET}' >> .env"
-                }
             }
         }
 
@@ -63,13 +50,16 @@ pipeline {
                 stage('Backend Tests') {
                     steps {
                         dir('backend') {
-                            sh 'npm run test || true' // Runs tests but doesn't break if one fails
+                            // Using || true allows the pipeline to continue even if a test fails
+                            // useful during early development phases
+                            sh 'npm run test || true'
                         }
                     }
                 }
                 stage('Frontend Tests') {
                     steps {
                         dir('frontend') {
+                            // Runs Angular tests in headless mode for Jenkins
                             sh 'npm run test -- --watch=false --browsers=ChromeHeadless || true'
                         }
                     }
@@ -81,6 +71,8 @@ pipeline {
     post {
         always {
             echo 'Pipeline execution finished.'
+            // Clean up the workspace to stay within your 3.74GB limit
+            cleanWs()
         }
         success {
             echo '✅ BulkCart build and tests were successful!'
