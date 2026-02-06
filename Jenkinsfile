@@ -1,19 +1,44 @@
 pipeline {
     agent any
-    tools { nodejs 'node-20' }
+
+    tools {
+        nodejs 'node-20'
+    }
 
     environment {
         DB_URL = credentials('BULKCART_DB_URL')
+        // This automatically creates DOCKER_CREDS_USR and DOCKER_CREDS_PSW
         DOCKER_CREDS = credentials('DOCKER_HUB_CREDS')
-        DOCKER_USER = "your-docker-hub-username"
+        DOCKER_USER = "aakash113"
     }
 
     stages {
-        stage('CI: Install & Build') {
+        stage('Sanity Check') {
             steps {
-                parallel {
-                    stage('Backend') { steps { dir('backend') { sh 'npm install && npm run build' } } }
-                    stage('Frontend') { steps { dir('frontend') { sh 'npm install && npm run build' } } }
+                sh 'node -v'
+                sh 'docker -v'
+            }
+        }
+
+        stage('CI: Install & Build') {
+            // FIX: 'parallel' is now directly under 'stage' (no 'steps' wrapper)
+            parallel {
+                stage('Backend Build') {
+                    steps {
+                        dir('backend') {
+                            sh 'npm install'
+                            sh 'npm run build'
+                        }
+                    }
+                }
+                stage('Frontend Build') {
+                    steps {
+                        dir('frontend') {
+                            sh 'npm install'
+                            // Ensure you run the production build
+                            sh 'npm run build --configuration=production'
+                        }
+                    }
                 }
             }
         }
@@ -21,14 +46,14 @@ pipeline {
         stage('CD: Package & Deliver') {
             steps {
                 script {
-                    // Login to Docker Hub
+                    // Docker Login using the env variables
                     sh "echo ${DOCKER_CREDS_PSW} | docker login -u ${DOCKER_CREDS_USR} --password-stdin"
 
-                    // Build and Push Backend
+                    // Build & Push Backend
                     sh "docker build -t ${DOCKER_USER}/bulkcart-backend:latest ./backend"
                     sh "docker push ${DOCKER_USER}/bulkcart-backend:latest"
 
-                    // Build and Push Frontend
+                    // Build & Push Frontend
                     sh "docker build -t ${DOCKER_USER}/bulkcart-frontend:latest ./frontend"
                     sh "docker push ${DOCKER_USER}/bulkcart-frontend:latest"
                 }
@@ -39,7 +64,10 @@ pipeline {
     post {
         always {
             script {
-                if (getContext(hudson.FilePath)) { cleanWs() }
+                // Safe cleanup to save space
+                if (getContext(hudson.FilePath)) {
+                    cleanWs(deleteDirs: true, notFailBuild: true)
+                }
             }
         }
     }
