@@ -7,8 +7,7 @@ pipeline {
 
   environment {
     DB_URL = credentials('BULKCART_DB_URL')
-    // must be a "Username with password" credential in Jenkins
-    DOCKER_CREDS = credentials('DOCKER_HUB_CREDS')
+    DOCKER_CREDS = credentials('DOCKER_HUB_CREDS') // username+password
     DOCKER_USER  = "aakash113"
   }
 
@@ -18,7 +17,7 @@ pipeline {
         sh 'node -v'
         sh 'docker -v'
         sh 'pwd && ls -la'
-        sh 'ls -la bulkcart'
+        sh 'ls -la backend frontend'
       }
     }
 
@@ -26,7 +25,7 @@ pipeline {
       parallel {
         stage('Backend Build') {
           steps {
-            dir('bulkcart/backend') {
+            dir('backend') {
               sh 'npm ci || npm install'
               sh 'npm run build'
             }
@@ -35,7 +34,7 @@ pipeline {
 
         stage('Frontend Build') {
           steps {
-            dir('bulkcart/frontend') {
+            dir('frontend') {
               sh 'npm ci --legacy-peer-deps || npm install --legacy-peer-deps'
               sh 'npm run build --configuration=production'
             }
@@ -47,12 +46,12 @@ pipeline {
     stage('CD: Package & Deliver') {
       steps {
         script {
-          sh "echo ${DOCKER_CREDS_PSW} | docker login -u ${DOCKER_CREDS_USR} --password-stdin"
+          sh 'echo "$DOCKER_CREDS_PSW" | docker login -u "$DOCKER_CREDS_USR" --password-stdin'
 
-          sh "docker build -t ${DOCKER_USER}/bulkcart-backend:latest bulkcart/backend"
+          sh "docker build -t ${DOCKER_USER}/bulkcart-backend:latest backend"
           sh "docker push ${DOCKER_USER}/bulkcart-backend:latest"
 
-          sh "docker build -t ${DOCKER_USER}/bulkcart-frontend:latest bulkcart/frontend"
+          sh "docker build -t ${DOCKER_USER}/bulkcart-frontend:latest frontend"
           sh "docker push ${DOCKER_USER}/bulkcart-frontend:latest"
         }
       }
