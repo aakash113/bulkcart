@@ -1,0 +1,19 @@
+cd /Users/aakash/Desktop/BulkCart
+
+cat > .gitignore <<'EOF'
+# env
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+
+# node
+**/node_modules/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+EOF
