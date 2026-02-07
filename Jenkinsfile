@@ -28,7 +28,7 @@ pipeline {
         stage('Backend Build') {
           steps {
             dir('backend') {
-              sh 'npm ci || npm install'
+              sh 'npm ci'
               sh 'npm run build'
             }
           }
@@ -37,8 +37,8 @@ pipeline {
         stage('Frontend Build') {
           steps {
             dir('frontend') {
-              sh 'npm ci --legacy-peer-deps || npm install --legacy-peer-deps'
-              sh 'npm run build --configuration=production'
+              sh 'npm ci --legacy-peer-deps'
+              sh 'npm run build -- --configuration=production'
             }
           }
         }

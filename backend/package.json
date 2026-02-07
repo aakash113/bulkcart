@@ -4,9 +4,9 @@
   "description": "<p align=\"center\">   <a href=\"http://nestjs.com/\" target=\"blank\"><img src=\"https://nestjs.com/img/logo-small.svg\" width=\"120\" alt=\"Nest Logo\" /></a> </p>",
   "main": "index.js",
   "scripts": {
-    "build": "nest build",
-    "start:dev": "nest start --watch",
+    "build": "npx nest build",
     "start:prod": "node dist/main",
+    "start:dev": "nest start --watch",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "private": true,
@@ -19,7 +19,9 @@
   "directories": {
     "test": "test"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@nestjs/cli": "^10.0.0"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC"
