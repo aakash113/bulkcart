@@ -11,16 +11,22 @@
   },
   "private": true,
   "dependencies": {
+    "@nestjs/common": "^11.1.13",
     "@nestjs/config": "^4.0.3",
+    "@nestjs/core": "^11.1.13",
+    "@nestjs/platform-express": "^11.1.13",
     "dotenv": "^17.2.4",
     "express": "^5.2.1",
-    "mongoose": "^9.1.6"
+    "mongoose": "^9.1.6",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
   },
   "directories": {
     "test": "test"
   },
   "devDependencies": {
-    "@nestjs/cli": "^10.0.0"
+    "@nestjs/cli": "^10.4.9",
+    "typescript": "^5.9.3"
   },
   "keywords": [],
   "author": "",
