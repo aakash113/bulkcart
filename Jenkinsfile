@@ -16,10 +16,12 @@ pipeline {
       steps {
         sh 'node -v'
         sh 'docker -v'
-        sh 'pwd && ls -la'
+        sh 'pwd'
+        sh 'ls -la'
         sh 'ls -la backend frontend'
       }
     }
+
 
     stage('CI: Install & Build') {
       parallel {
