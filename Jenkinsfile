@@ -31,15 +31,15 @@ pipeline {
                         }
                     }
                 }
-                stage('Frontend Build') {
-                    steps {
-                        dir('frontend') {
-                            sh 'npm install'
-                            // Ensure you run the production build
-                            sh 'npm run build --configuration=production'
-                        }
+            stage('Frontend Build') {
+                steps {
+                    dir('frontend') {
+                        // FIX: Add --legacy-peer-deps to ignore version strictness
+                        sh 'npm install --legacy-peer-deps'
+                        sh 'npm run build --configuration=production'
                     }
                 }
+            }
             }
         }
 
