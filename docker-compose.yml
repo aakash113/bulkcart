@@ -2,8 +2,10 @@ services:
   db:
     image: postgres:15-alpine
     container_name: bulkcart-db
+    restart: always
+    env_file:
+      - .env
     environment:
-      # This tells Docker to look at your Root .env file
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
@@ -11,6 +13,36 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: bulkcart-backend
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: bulkcart-frontend
+    restart: always
+    ports:
+      - "4200:4200"
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:
