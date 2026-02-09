@@ -7,7 +7,7 @@ pipeline {
 
   environment {
     DB_URL = credentials('BULKCART_DB_URL')
-    DOCKER_CREDS = credentials('DOCKER_HUB_CREDS') // username+password
+    DOCKER_CREDS = credentials('docker-hub-creds') // username+password
     DOCKER_USER  = "aakash113"
   }
 
