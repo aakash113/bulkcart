@@ -6,7 +6,7 @@ pipeline {
   }
 
   environment {
-    DB_URL = credentials('BULKCART_DB_URL')
+//     DB_URL = credentials('BULKCART_DB_URL')
     DOCKER_CREDS = credentials('docker-hub-creds') // username+password
     DOCKER_USER  = "aakash113"
   }
@@ -62,7 +62,14 @@ pipeline {
 
   post {
     always {
-      cleanWs(deleteDirs: true, notFailBuild: true)
+      script {
+        try {
+          cleanWs(deleteDirs: true, notFailBuild: true)
+        } catch (e) {
+          echo "cleanWs skipped: ${e}"
+        }
+      }
     }
   }
+
 }
