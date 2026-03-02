@@ -6,12 +6,12 @@ pipeline {
   }
 
   environment {
-//     DB_URL = credentials('BULKCART_DB_URL')
-    DOCKER_CREDS = credentials('docker-hub-creds') // username+password
+    DOCKER_CREDS = credentials('docker-hub-creds')
     DOCKER_USER  = "aakash113"
   }
 
   stages {
+
     stage('Sanity Check') {
       steps {
         sh 'node -v'
@@ -21,7 +21,6 @@ pipeline {
         sh 'ls -la backend frontend'
       }
     }
-
 
     stage('CI: Install & Build') {
       parallel {
@@ -58,6 +57,39 @@ pipeline {
         }
       }
     }
+
+    stage('Deploy to DEV') {
+      when { branch 'staging' }
+
+      environment {
+        DEV_HOST = '18.220.122.214'
+        DEV_USER = 'ec2-user'
+        DEV_APP_DIR = '/home/ec2-user/bulkcart'
+      }
+
+      steps {
+        sshagent(['dev-ec2-key']) {
+          sh '''
+            set -e
+            echo "Deploying to DEV EC2: $DEV_HOST"
+
+            ssh -o StrictHostKeyChecking=no ${DEV_USER}@${DEV_HOST} << 'EOF'
+              set -e
+              cd /home/ec2-user/bulkcart
+
+              docker pull aakash113/bulkcart-backend:latest
+              docker pull aakash113/bulkcart-frontend:latest
+
+              docker compose down
+              docker compose up -d
+
+              docker ps
+              echo "Deployment complete."
+            EOF
+          '''
+        }
+      }
+    }
   }
 
   post {
@@ -71,5 +103,4 @@ pipeline {
       }
     }
   }
-
 }
