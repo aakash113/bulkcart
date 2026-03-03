@@ -90,6 +90,59 @@ pipeline {
         }
       }
     }
+
+    stage('TestRigor: DEV Smoke') {
+      when { branch 'staging' }
+
+      environment {
+        TESTRIGOR_TOKEN = credentials('testrigor-token')
+        TESTRIGOR_APPID = credentials('testrigor-appid')
+      }
+
+      steps {
+        sh '''
+          set -e
+
+          echo "Triggering testRigor run..."
+          curl -sS -X POST \
+            -H "Content-type: application/json" \
+            -H "auth-token: ${TESTRIGOR_TOKEN}" \
+            "https://api.testrigor.com/api/v1/apps/${TESTRIGOR_APPID}/retest" >/dev/null
+
+          echo "Polling testRigor status..."
+          sleep 10
+
+          # Poll up to ~10 minutes (60 x 10s)
+          for i in $(seq 1 60); do
+            resp=$(curl -sS -i -X GET \
+              -H "auth-token: ${TESTRIGOR_TOKEN}" \
+              -H "Accept: application/json" \
+              "https://api.testrigor.com/api/v1/apps/${TESTRIGOR_APPID}/status")
+
+            code=$(echo "$resp" | awk 'NR==1{print $2}')
+            echo "testRigor status HTTP: $code"
+
+            if [ "$code" = "200" ]; then
+              echo "✅ testRigor PASS"
+              exit 0
+            elif [ "$code" = "230" ]; then
+              echo "❌ testRigor FAIL"
+              exit 1
+            elif [ "$code" = "227" ] || [ "$code" = "228" ]; then
+              echo "⏳ still running..."
+            else
+              echo "❌ unexpected status: $code"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "❌ testRigor timeout"
+          exit 1
+        '''
+      }
+    }
   }
 
   post {

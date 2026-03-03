@@ -1,0 +1,196 @@
+/* ================= HERO ================= */
+
+.hero {
+  background: linear-gradient(135deg, #0d2a4d, #0f3b6b);
+  color: white;
+  padding: 80px 0;
+}
+
+.hero-container {
+  width: 1200px;
+  max-width: 90%;
+  margin: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 60px;
+}
+
+.hero-left {
+  flex: 1;
+}
+
+.badge {
+  background: #1e3a5f;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  display: inline-block;
+  margin-bottom: 20px;
+}
+
+.hero h1 {
+  font-size: 52px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 20px;
+}
+
+.hero p {
+  color: #d0d9e5;
+  font-size: 16px;
+  max-width: 450px;
+  margin-bottom: 30px;
+}
+
+.hero-buttons {
+  display: flex;
+  gap: 15px;
+}
+
+.primary-btn {
+  background: #2563eb;
+  border: none;
+  padding: 14px 24px;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondary-btn {
+  width: 120px;
+  background: #e5e7eb;
+  border-radius: 8px;
+  border: none;
+}
+
+/* ================= SNAPSHOT CARD ================= */
+
+.hero-right {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.snapshot-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(6px);
+  border-radius: 16px;
+  padding: 30px;
+  width: 100%;
+  max-width: 480px;
+}
+
+.snapshot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.snapshot-header h3 {
+  margin: 0;
+}
+
+.updated {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.live-badge {
+  background: #22c55e;
+  padding: 6px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.stats {
+  display: flex;
+  gap: 15px;
+}
+
+.stat-box {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 20px;
+  border-radius: 12px;
+  flex: 1;
+  text-align: center;
+}
+
+.stat-box h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.stat-box span {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+/* ================= PROBLEM SECTION ================= */
+
+.problem-section {
+  background: #f3f4f6;
+  padding: 80px 0;
+}
+
+.problem-container {
+  width: 1100px;
+  max-width: 90%;
+  margin: auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 60px;
+}
+
+.problem-container h2 {
+  margin-bottom: 25px;
+}
+
+.problem-container ul {
+  list-style: none;
+  padding: 0;
+}
+
+.problem-container li {
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  font-size: 15px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  background: orange;
+  border-radius: 50%;
+  margin-right: 12px;
+}
+
+.success .check {
+  background: #22c55e;
+  color: white;
+  border-radius: 50%;
+  font-size: 12px;
+  padding: 3px 6px;
+  margin-right: 12px;
+}
+
+/* ================= RESPONSIVE ================= */
+
+@media (max-width: 900px) {
+  .hero-container,
+  .problem-container {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .stats {
+    flex-direction: column;
+  }
+
+  .hero-buttons {
+    justify-content: center;
+  }
+}
