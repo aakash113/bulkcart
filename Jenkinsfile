@@ -59,7 +59,7 @@ pipeline {
     }
 
     stage('Deploy to DEV') {
-      when { branch 'staging' }
+      when { branch 'main' }
 
       environment {
         DEV_HOST = '18.220.122.214'
@@ -92,7 +92,7 @@ pipeline {
     }
 
     stage('TestRigor: DEV Smoke') {
-      when { branch 'staging' }
+      when { branch 'main' }
 
       environment {
         TESTRIGOR_TOKEN = credentials('testrigor-token')
