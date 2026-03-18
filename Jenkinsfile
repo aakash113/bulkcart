@@ -8,9 +8,22 @@ pipeline {
   environment {
     DOCKER_CREDS = credentials('docker-hub-creds')
     DOCKER_USER  = "aakash113"
+    SLACK_WEBHOOK  = credentials('slack-webhook')
+    APP_NAME       = "BulkCart"
+    ENV_NAME       = "DEV"
   }
 
   stages {
+    stage('Notify Start') {
+        steps {
+          sh '''
+            curl -sS -X POST -H 'Content-type: application/json' \
+            --data "{
+              \\"text\\":\\"🚀 ${APP_NAME} pipeline started | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
+            }" \
+            "$SLACK_WEBHOOK"
+          '''
+        }
 
     stage('Sanity Check') {
       steps {
@@ -145,7 +158,36 @@ pipeline {
     }
   }
 
-  post {
+    post {
+      success {
+        sh '''
+          curl -sS -X POST -H 'Content-type: application/json' \
+          --data "{
+            \\"text\\":\\"✅ ${APP_NAME} pipeline successful | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
+          }" \
+          "$SLACK_WEBHOOK"
+        '''
+      }
+
+      failure {
+        sh '''
+          curl -sS -X POST -H 'Content-type: application/json' \
+          --data "{
+            \\"text\\":\\"❌ ${APP_NAME} pipeline failed | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | Check logs: ${BUILD_URL}\\"
+          }" \
+          "$SLACK_WEBHOOK"
+        '''
+      }
+
+      unstable {
+        sh '''
+          curl -sS -X POST -H 'Content-type: application/json' \
+          --data "{
+            \\"text\\":\\"⚠️ ${APP_NAME} pipeline unstable | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
+          }" \
+          "$SLACK_WEBHOOK"
+        '''
+      }
     always {
       script {
         try {
