@@ -6,8 +6,8 @@ pipeline {
   }
 
   environment {
-    DOCKER_CREDS = credentials('docker-hub-creds')
-    DOCKER_USER  = "aakash113"
+    DOCKER_CREDS   = credentials('docker-hub-creds')
+    DOCKER_USER    = "aakash113"
     SLACK_WEBHOOK  = credentials('slack-webhook')
     APP_NAME       = "BulkCart"
     ENV_NAME       = "DEV"
@@ -15,15 +15,16 @@ pipeline {
 
   stages {
     stage('Notify Start') {
-        steps {
-          sh '''
-            curl -sS -X POST -H 'Content-type: application/json' \
-            --data "{
-              \\"text\\":\\"🚀 ${APP_NAME} pipeline started | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
-            }" \
-            "$SLACK_WEBHOOK"
-          '''
-        }
+      steps {
+        sh '''
+          curl -sS -X POST -H 'Content-type: application/json' \
+          --data "{
+            \\"text\\":\\"🚀 ${APP_NAME} pipeline started | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
+          }" \
+          "$SLACK_WEBHOOK"
+        '''
+      }
+    }
 
     stage('Sanity Check') {
       steps {
@@ -61,10 +62,8 @@ pipeline {
       steps {
         script {
           sh 'echo "$DOCKER_CREDS_PSW" | docker login -u "$DOCKER_CREDS_USR" --password-stdin'
-
           sh "docker build -t ${DOCKER_USER}/bulkcart-backend:latest backend"
           sh "docker push ${DOCKER_USER}/bulkcart-backend:latest"
-
           sh "docker build -t ${DOCKER_USER}/bulkcart-frontend:latest frontend"
           sh "docker push ${DOCKER_USER}/bulkcart-frontend:latest"
         }
@@ -125,7 +124,6 @@ pipeline {
           echo "Polling testRigor status..."
           sleep 10
 
-          # Poll up to ~10 minutes (60 x 10s)
           for i in $(seq 1 60); do
             resp=$(curl -sS -i -X GET \
               -H "auth-token: ${TESTRIGOR_TOKEN}" \
@@ -158,36 +156,37 @@ pipeline {
     }
   }
 
-    post {
-      success {
-        sh '''
-          curl -sS -X POST -H 'Content-type: application/json' \
-          --data "{
-            \\"text\\":\\"✅ ${APP_NAME} pipeline successful | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
-          }" \
-          "$SLACK_WEBHOOK"
-        '''
-      }
+  post {
+    success {
+      sh '''
+        curl -sS -X POST -H 'Content-type: application/json' \
+        --data "{
+          \\"text\\":\\"✅ ${APP_NAME} pipeline successful | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
+        }" \
+        "$SLACK_WEBHOOK"
+      '''
+    }
 
-      failure {
-        sh '''
-          curl -sS -X POST -H 'Content-type: application/json' \
-          --data "{
-            \\"text\\":\\"❌ ${APP_NAME} pipeline failed | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | Check logs: ${BUILD_URL}\\"
-          }" \
-          "$SLACK_WEBHOOK"
-        '''
-      }
+    failure {
+      sh '''
+        curl -sS -X POST -H 'Content-type: application/json' \
+        --data "{
+          \\"text\\":\\"❌ ${APP_NAME} pipeline failed | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | Check logs: ${BUILD_URL}\\"
+        }" \
+        "$SLACK_WEBHOOK"
+      '''
+    }
 
-      unstable {
-        sh '''
-          curl -sS -X POST -H 'Content-type: application/json' \
-          --data "{
-            \\"text\\":\\"⚠️ ${APP_NAME} pipeline unstable | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
-          }" \
-          "$SLACK_WEBHOOK"
-        '''
-      }
+    unstable {
+      sh '''
+        curl -sS -X POST -H 'Content-type: application/json' \
+        --data "{
+          \\"text\\":\\"⚠️ ${APP_NAME} pipeline unstable | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
+        }" \
+        "$SLACK_WEBHOOK"
+      '''
+    }
+
     always {
       script {
         try {
