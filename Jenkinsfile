@@ -58,10 +58,12 @@ pipeline {
             error("Unsupported TARGET_ENV: ${params.TARGET_ENV}")
           }
 
-          echo "TARGET_ENV     = ${params.TARGET_ENV}"
-          echo "IMAGE_TAG      = ${env.IMAGE_TAG}"
-          echo "DEPLOY_HOST    = ${env.DEPLOY_HOST}"
-          echo "DEPLOY_APP_DIR = ${env.DEPLOY_APP_DIR}"
+          echo "TARGET_ENV        = ${params.TARGET_ENV}"
+          echo "IMAGE_TAG         = ${env.IMAGE_TAG}"
+          echo "DEPLOY_HOST       = ${env.DEPLOY_HOST}"
+          echo "DEPLOY_USER       = ${env.DEPLOY_USER}"
+          echo "DEPLOY_APP_DIR    = ${env.DEPLOY_APP_DIR}"
+          echo "SSH_CREDENTIAL_ID = ${env.SSH_CREDENTIAL_ID}"
         }
       }
     }
@@ -69,7 +71,7 @@ pipeline {
     stage('Notify Start') {
       steps {
         sh '''
-          curl -sS -X POST -H 'Content-type: application/json' \
+          curl -sS -X POST -H "Content-type: application/json" \
           --data "{
             \\"text\\":\\"🚀 ${APP_NAME} pipeline started | Env: ${TARGET_ENV} | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
           }" \
@@ -83,7 +85,9 @@ pipeline {
         sh 'echo "Branch: $BRANCH_NAME"'
         sh 'echo "Target Env: $TARGET_ENV"'
         sh 'node -v'
+        sh 'npm -v || true'
         sh 'docker -v'
+        sh 'docker buildx version || true'
         sh 'pwd'
         sh 'ls -la'
         sh 'ls -la backend frontend'
@@ -118,27 +122,44 @@ pipeline {
       }
     }
 
-    stage('CD: Build Backend Image') {
+    stage('CD: Setup Buildx') {
       steps {
-        sh "docker build -t ${DOCKER_USER}/bulkcart-backend:${IMAGE_TAG} backend"
+        sh '''
+          set +e
+          docker buildx inspect bulkcartbuilder >/dev/null 2>&1
+          if [ $? -ne 0 ]; then
+            docker buildx create --name bulkcartbuilder --use
+          else
+            docker buildx use bulkcartbuilder
+          fi
+          set -e
+
+          docker buildx inspect --bootstrap
+        '''
       }
     }
 
-    stage('CD: Push Backend Image') {
+    stage('CD: Build & Push Backend Image') {
       steps {
-        sh "docker push ${DOCKER_USER}/bulkcart-backend:${IMAGE_TAG}"
+        sh '''
+          docker buildx build \
+            --platform linux/amd64 \
+            -t aakash113/bulkcart-backend:${IMAGE_TAG} \
+            --push \
+            ./backend
+        '''
       }
     }
 
-    stage('CD: Build Frontend Image') {
+    stage('CD: Build & Push Frontend Image') {
       steps {
-        sh "docker build -t ${DOCKER_USER}/bulkcart-frontend:${IMAGE_TAG} frontend"
-      }
-    }
-
-    stage('CD: Push Frontend Image') {
-      steps {
-        sh "docker push ${DOCKER_USER}/bulkcart-frontend:${IMAGE_TAG}"
+        sh '''
+          docker buildx build \
+            --platform linux/amd64 \
+            -t aakash113/bulkcart-frontend:${IMAGE_TAG} \
+            --push \
+            ./frontend
+        '''
       }
     }
 
@@ -151,16 +172,26 @@ pipeline {
 
             ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << EOF
               set -e
+
               mkdir -p ${DEPLOY_APP_DIR}
               cd ${DEPLOY_APP_DIR}
 
+              echo "Current directory:"
+              pwd
+              ls -la
+
+              echo "Pulling latest images..."
               docker pull aakash113/bulkcart-backend:${IMAGE_TAG}
               docker pull aakash113/bulkcart-frontend:${IMAGE_TAG}
 
+              echo "Restarting services..."
               docker compose down || true
               docker compose up -d
 
+              echo "Running containers:"
               docker ps
+
+              echo "${TARGET_ENV} deployment complete."
             EOF
           '''
         }
@@ -175,11 +206,13 @@ pipeline {
         sh '''
           set -e
 
+          echo "Triggering testRigor for ${TARGET_ENV}..."
           curl -sS -X POST \
             -H "Content-type: application/json" \
             -H "auth-token: ${TESTRIGOR_TOKEN}" \
             "https://api.testrigor.com/api/v1/apps/${TESTRIGOR_APPID}/retest" >/dev/null
 
+          echo "Waiting before polling..."
           sleep 10
 
           for i in $(seq 1 60); do
@@ -192,22 +225,22 @@ pipeline {
             echo "testRigor status HTTP: $code"
 
             if [ "$code" = "200" ]; then
-              echo "PASS"
+              echo "✅ testRigor PASS"
               exit 0
             elif [ "$code" = "230" ]; then
-              echo "FAIL"
+              echo "❌ testRigor FAIL"
               exit 1
             elif [ "$code" = "227" ] || [ "$code" = "228" ]; then
-              echo "still running..."
+              echo "⏳ test still running..."
             else
-              echo "unexpected status: $code"
+              echo "❌ unexpected testRigor status: $code"
               exit 1
             fi
 
             sleep 10
           done
 
-          echo "testRigor timeout"
+          echo "❌ testRigor timeout"
           exit 1
         '''
       }
@@ -217,7 +250,7 @@ pipeline {
   post {
     success {
       sh '''
-        curl -sS -X POST -H 'Content-type: application/json' \
+        curl -sS -X POST -H "Content-type: application/json" \
         --data "{
           \\"text\\":\\"✅ ${APP_NAME} pipeline successful | Env: ${TARGET_ENV} | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
         }" \
@@ -227,12 +260,32 @@ pipeline {
 
     failure {
       sh '''
-        curl -sS -X POST -H 'Content-type: application/json' \
+        curl -sS -X POST -H "Content-type: application/json" \
         --data "{
           \\"text\\":\\"❌ ${APP_NAME} pipeline failed | Env: ${TARGET_ENV} | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | Check logs: ${BUILD_URL}\\"
         }" \
         "$SLACK_WEBHOOK"
       '''
+    }
+
+    unstable {
+      sh '''
+        curl -sS -X POST -H "Content-type: application/json" \
+        --data "{
+          \\"text\\":\\"⚠️ ${APP_NAME} pipeline unstable | Env: ${TARGET_ENV} | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
+        }" \
+        "$SLACK_WEBHOOK"
+      '''
+    }
+
+    always {
+      script {
+        try {
+          cleanWs(deleteDirs: true, notFailBuild: true)
+        } catch (e) {
+          echo "cleanWs skipped: ${e}"
+        }
+      }
     }
   }
 }
