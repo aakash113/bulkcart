@@ -5,75 +5,21 @@ pipeline {
     nodejs 'node-20'
   }
 
-  parameters {
-    choice(
-      name: 'TARGET_ENV',
-      choices: ['DEV', 'QA'],
-      description: 'Select environment to deploy'
-    )
-    booleanParam(
-      name: 'RUN_TESTRIGOR',
-      defaultValue: false,
-      description: 'Run testRigor smoke test after deployment'
-    )
-  }
-
   environment {
-    DOCKER_CREDS    = credentials('docker-hub-creds')
-    DOCKER_USER     = 'aakash113'
-    SLACK_WEBHOOK   = credentials('slack-webhook')
-    TESTRIGOR_TOKEN = credentials('testrigor-token')
-    APP_NAME        = 'BulkCart'
+    DOCKER_CREDS   = credentials('docker-hub-creds')
+    DOCKER_USER    = "aakash113"
+    SLACK_WEBHOOK  = credentials('slack-webhook')
+    APP_NAME       = "BulkCart"
+    ENV_NAME       = "DEV"
   }
 
   stages {
-    stage('Validate Branch') {
-      steps {
-        script {
-          if (env.BRANCH_NAME != 'main') {
-            error("This pipeline only deploys from main branch. Current branch: ${env.BRANCH_NAME}")
-          }
-        }
-      }
-    }
-
-    stage('Set Deployment Config') {
-      steps {
-        script {
-          if (params.TARGET_ENV == 'DEV') {
-            env.IMAGE_TAG         = 'dev'
-            env.DEPLOY_HOST       = '18.222.126.228'
-            env.DEPLOY_USER       = 'ec2-user'
-            env.DEPLOY_APP_DIR    = '/home/ec2-user/bulkcart/dev'
-            env.SSH_CREDENTIAL_ID = 'main-ec2-key'
-            env.TESTRIGOR_APPID   = credentials('testrigor-appid-dev')
-          } else if (params.TARGET_ENV == 'QA') {
-            env.IMAGE_TAG         = 'qa'
-            env.DEPLOY_HOST       = '18.222.163.244'
-            env.DEPLOY_USER       = 'ec2-user'
-            env.DEPLOY_APP_DIR    = '/home/ec2-user/bulkcart/qa'
-            env.SSH_CREDENTIAL_ID = 'qa-ec2-key'
-            env.TESTRIGOR_APPID   = credentials('testrigor-appid-qa')
-          } else {
-            error("Unsupported TARGET_ENV: ${params.TARGET_ENV}")
-          }
-
-          echo "TARGET_ENV        = ${params.TARGET_ENV}"
-          echo "IMAGE_TAG         = ${env.IMAGE_TAG}"
-          echo "DEPLOY_HOST       = ${env.DEPLOY_HOST}"
-          echo "DEPLOY_USER       = ${env.DEPLOY_USER}"
-          echo "DEPLOY_APP_DIR    = ${env.DEPLOY_APP_DIR}"
-          echo "SSH_CREDENTIAL_ID = ${env.SSH_CREDENTIAL_ID}"
-        }
-      }
-    }
-
     stage('Notify Start') {
       steps {
         sh '''
-          curl -sS -X POST -H "Content-type: application/json" \
+          curl -sS -X POST -H 'Content-type: application/json' \
           --data "{
-            \\"text\\":\\"🚀 ${APP_NAME} pipeline started | Env: ${TARGET_ENV} | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
+            \\"text\\":\\"🚀 ${APP_NAME} pipeline started | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
           }" \
           "$SLACK_WEBHOOK"
         '''
@@ -82,12 +28,8 @@ pipeline {
 
     stage('Sanity Check') {
       steps {
-        sh 'echo "Branch: $BRANCH_NAME"'
-        sh 'echo "Target Env: $TARGET_ENV"'
         sh 'node -v'
-        sh 'npm -v || true'
         sh 'docker -v'
-        sh 'docker buildx version || true'
         sh 'pwd'
         sh 'ls -la'
         sh 'ls -la backend frontend'
@@ -116,103 +58,70 @@ pipeline {
       }
     }
 
-    stage('CD: Docker Login') {
+    stage('CD: Package & Deliver') {
       steps {
-        sh 'echo "$DOCKER_CREDS_PSW" | docker login -u "$DOCKER_CREDS_USR" --password-stdin'
+        script {
+          sh 'echo "$DOCKER_CREDS_PSW" | docker login -u "$DOCKER_CREDS_USR" --password-stdin'
+          sh "docker build -t ${DOCKER_USER}/bulkcart-backend:latest backend"
+          sh "docker push ${DOCKER_USER}/bulkcart-backend:latest"
+          sh "docker build -t ${DOCKER_USER}/bulkcart-frontend:latest frontend"
+          sh "docker push ${DOCKER_USER}/bulkcart-frontend:latest"
+        }
       }
     }
 
-    stage('CD: Setup Buildx') {
-      steps {
-        sh '''
-          set +e
-          docker buildx inspect bulkcartbuilder >/dev/null 2>&1
-          if [ $? -ne 0 ]; then
-            docker buildx create --name bulkcartbuilder --use
-          else
-            docker buildx use bulkcartbuilder
-          fi
-          set -e
+    stage('Deploy to DEV') {
+      when { branch 'main' }
 
-          docker buildx inspect --bootstrap
-        '''
+      environment {
+        DEV_HOST = '18.220.122.214'
+        DEV_USER = 'ec2-user'
+        DEV_APP_DIR = '/home/ec2-user/bulkcart'
       }
-    }
 
-    stage('CD: Build & Push Backend Image') {
       steps {
-        sh '''
-          docker buildx build \
-            --platform linux/amd64 \
-            -t aakash113/bulkcart-backend:${IMAGE_TAG} \
-            --push \
-            ./backend
-        '''
-      }
-    }
-
-    stage('CD: Build & Push Frontend Image') {
-      steps {
-        sh '''
-          docker buildx build \
-            --platform linux/amd64 \
-            -t aakash113/bulkcart-frontend:${IMAGE_TAG} \
-            --push \
-            ./frontend
-        '''
-      }
-    }
-
-    stage('Deploy') {
-      steps {
-        sshagent(credentials: ["${env.SSH_CREDENTIAL_ID}"]) {
+        sshagent(['dev-ec2-key']) {
           sh '''
             set -e
-            echo "Deploying ${TARGET_ENV} to ${DEPLOY_HOST}"
+            echo "Deploying to DEV EC2: $DEV_HOST"
 
-            ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << EOF
+            ssh -o StrictHostKeyChecking=no ${DEV_USER}@${DEV_HOST} << 'EOF'
               set -e
+              cd /home/ec2-user/bulkcart
 
-              mkdir -p ${DEPLOY_APP_DIR}
-              cd ${DEPLOY_APP_DIR}
+              docker pull aakash113/bulkcart-backend:latest
+              docker pull aakash113/bulkcart-frontend:latest
 
-              echo "Current directory:"
-              pwd
-              ls -la
-
-              echo "Pulling latest images..."
-              docker pull aakash113/bulkcart-backend:${IMAGE_TAG}
-              docker pull aakash113/bulkcart-frontend:${IMAGE_TAG}
-
-              echo "Restarting services..."
-              docker compose down || true
+              docker compose down
               docker compose up -d
 
-              echo "Running containers:"
               docker ps
-
-              echo "${TARGET_ENV} deployment complete."
+              echo "Deployment complete."
             EOF
           '''
         }
       }
     }
 
-    stage('TestRigor Smoke') {
-      when {
-        expression { return params.RUN_TESTRIGOR }
+    stage('TestRigor: DEV Smoke') {
+      when { branch 'main' }
+
+      environment {
+        TESTRIGOR_TOKEN = credentials('testrigor-token')
+        TESTRIGOR_APPID = credentials('testrigor-appid')
       }
+
       steps {
         sh '''
           set -e
 
-          echo "Triggering testRigor for ${TARGET_ENV}..."
+          echo "Triggering testRigor run..."
           curl -sS -X POST \
             -H "Content-type: application/json" \
             -H "auth-token: ${TESTRIGOR_TOKEN}" \
             "https://api.testrigor.com/api/v1/apps/${TESTRIGOR_APPID}/retest" >/dev/null
 
-          echo "Waiting before polling..."
+          echo "Polling testRigor status..."
           sleep 10
 
           for i in $(seq 1 60); do
@@ -231,9 +140,9 @@ pipeline {
               echo "❌ testRigor FAIL"
               exit 1
             elif [ "$code" = "227" ] || [ "$code" = "228" ]; then
-              echo "⏳ test still running..."
+              echo "⏳ still running..."
             else
-              echo "❌ unexpected testRigor status: $code"
+              echo "❌ unexpected status: $code"
               exit 1
             fi
 
@@ -250,9 +159,9 @@ pipeline {
   post {
     success {
       sh '''
-        curl -sS -X POST -H "Content-type: application/json" \
+        curl -sS -X POST -H 'Content-type: application/json' \
         --data "{
-          \\"text\\":\\"✅ ${APP_NAME} pipeline successful | Env: ${TARGET_ENV} | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
+          \\"text\\":\\"✅ ${APP_NAME} pipeline successful | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
         }" \
         "$SLACK_WEBHOOK"
       '''
@@ -260,9 +169,9 @@ pipeline {
 
     failure {
       sh '''
-        curl -sS -X POST -H "Content-type: application/json" \
+        curl -sS -X POST -H 'Content-type: application/json' \
         --data "{
-          \\"text\\":\\"❌ ${APP_NAME} pipeline failed | Env: ${TARGET_ENV} | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | Check logs: ${BUILD_URL}\\"
+          \\"text\\":\\"❌ ${APP_NAME} pipeline failed | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | Check logs: ${BUILD_URL}\\"
         }" \
         "$SLACK_WEBHOOK"
       '''
@@ -270,9 +179,9 @@ pipeline {
 
     unstable {
       sh '''
-        curl -sS -X POST -H "Content-type: application/json" \
+        curl -sS -X POST -H 'Content-type: application/json' \
         --data "{
-          \\"text\\":\\"⚠️ ${APP_NAME} pipeline unstable | Env: ${TARGET_ENV} | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
+          \\"text\\":\\"⚠️ ${APP_NAME} pipeline unstable | Env: ${ENV_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
         }" \
         "$SLACK_WEBHOOK"
       '''
