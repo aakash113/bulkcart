@@ -10,7 +10,7 @@ pipeline {
     DOCKER_USER    = "aakash113"
     SLACK_WEBHOOK  = credentials('slack-webhook')
     APP_NAME       = "BulkCart"
-    ENV_NAME       = "DEV"
+    ENV_NAME       = "QA"
   }
 
   stages {
