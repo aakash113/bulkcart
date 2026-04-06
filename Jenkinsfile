@@ -25,17 +25,25 @@ pipeline {
   }
 
   environment {
-    APP_NAME    = 'BulkCart'
-    DOCKER_USER = 'aakash113'
-    DEPLOY_USER = 'ec2-user'
+    APP_NAME                 = 'BulkCart'
+    DOCKER_USER              = 'aakash113'
+    DEPLOY_USER              = 'ec2-user'
+    QA_SLACK_CREDENTIAL      = 'slack-webhook-qa'
+    PROD_SLACK_CREDENTIAL    = 'slack-webhook-prod'
+    QA_TESTRIGOR_CREDENTIAL  = 'testrigor-appid-qa'
   }
 
   stages {
     stage('Validate Branch') {
       steps {
         script {
-          if (env.BRANCH_NAME != 'main') {
-            error("This pipeline only deploys from main branch. Current branch: ${env.BRANCH_NAME}")
+          def branchName = env.BRANCH_NAME ?: env.GIT_BRANCH ?: ''
+          branchName = branchName.replaceFirst(/^origin\//, '')
+
+          echo "Resolved branch name: ${branchName}"
+
+          if (branchName != 'main') {
+            error("This pipeline only deploys from main branch. Current branch: ${branchName ?: 'unknown'}")
           }
         }
       }
@@ -49,15 +57,15 @@ pipeline {
             env.DEPLOY_HOST                = '18.222.163.244'
             env.DEPLOY_APP_DIR             = '/home/ec2-user/bulkcart/qa'
             env.SSH_CREDENTIAL_ID          = 'qa-ec2-key'
-            env.SLACK_WEBHOOK_CREDENTIAL   = 'slack-webhook-qa'
-            env.TESTRIGOR_APPID_CREDENTIAL = 'testrigor-appid-qa'
+            env.SLACK_WEBHOOK_CREDENTIAL   = env.QA_SLACK_CREDENTIAL
+            env.TESTRIGOR_APPID_CREDENTIAL = env.QA_TESTRIGOR_CREDENTIAL
             env.ENV_LABEL                  = 'QA'
           } else if (params.DEPLOY_ENV == 'PROD') {
             env.IMAGE_TAG                  = 'prod'
             env.DEPLOY_HOST                = '18.222.126.228'
             env.DEPLOY_APP_DIR             = '/home/ec2-user/bulkcart/prod'
             env.SSH_CREDENTIAL_ID          = 'main-ec2-key'
-            env.SLACK_WEBHOOK_CREDENTIAL   = 'slack-webhook-prod'
+            env.SLACK_WEBHOOK_CREDENTIAL   = env.PROD_SLACK_CREDENTIAL
             env.TESTRIGOR_APPID_CREDENTIAL = ''
             env.ENV_LABEL                  = 'PROD'
           } else {
@@ -76,21 +84,18 @@ pipeline {
 
     stage('Slack Notify Start') {
       steps {
-        withCredentials([string(credentialsId: "${env.SLACK_WEBHOOK_CREDENTIAL}", variable: 'SLACK_WEBHOOK_URL')]) {
-          sh '''
-            curl -sS -X POST -H "Content-type: application/json" \
-            --data "{
-              \\"text\\":\\"🚀 ${APP_NAME} ${ENV_LABEL} deployment started | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
-            }" \
-            "$SLACK_WEBHOOK_URL"
-          '''
+        script {
+          notifySlack(
+            env.SLACK_WEBHOOK_CREDENTIAL,
+            "🚀 ${env.APP_NAME} ${env.ENV_LABEL} deployment started | Branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'main'} | Job: ${env.JOB_NAME} | Build: #${env.BUILD_NUMBER} | ${env.BUILD_URL}"
+          )
         }
       }
     }
 
     stage('Sanity Check') {
       steps {
-        sh 'echo "Branch: $BRANCH_NAME"'
+        sh 'echo "Branch: ${BRANCH_NAME:-$GIT_BRANCH}"'
         sh 'echo "Deploy Env: $DEPLOY_ENV"'
         sh 'node -v'
         sh 'npm -v || true'
@@ -284,43 +289,34 @@ pipeline {
   post {
     success {
       script {
-        withCredentials([string(credentialsId: "${env.SLACK_WEBHOOK_CREDENTIAL}", variable: 'SLACK_WEBHOOK_URL')]) {
-          sh '''
-            curl -sS -X POST -H "Content-type: application/json" \
-            --data "{
-              \\"text\\":\\"✅ ${APP_NAME} ${ENV_LABEL} deployment successful | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
-            }" \
-            "$SLACK_WEBHOOK_URL"
-          '''
-        }
+        def slackCred = env.SLACK_WEBHOOK_CREDENTIAL ?: (params.DEPLOY_ENV == 'PROD' ? env.PROD_SLACK_CREDENTIAL : env.QA_SLACK_CREDENTIAL)
+        def envLabel = env.ENV_LABEL ?: params.DEPLOY_ENV
+        notifySlack(
+          slackCred,
+          "✅ ${env.APP_NAME} ${envLabel} deployment successful | Branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'main'} | Job: ${env.JOB_NAME} | Build: #${env.BUILD_NUMBER} | ${env.BUILD_URL}"
+        )
       }
     }
 
     failure {
       script {
-        withCredentials([string(credentialsId: "${env.SLACK_WEBHOOK_CREDENTIAL}", variable: 'SLACK_WEBHOOK_URL')]) {
-          sh '''
-            curl -sS -X POST -H "Content-type: application/json" \
-            --data "{
-              \\"text\\":\\"❌ ${APP_NAME} ${ENV_LABEL} deployment failed | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | Check logs: ${BUILD_URL}\\"
-            }" \
-            "$SLACK_WEBHOOK_URL"
-          '''
-        }
+        def slackCred = env.SLACK_WEBHOOK_CREDENTIAL ?: (params.DEPLOY_ENV == 'PROD' ? env.PROD_SLACK_CREDENTIAL : env.QA_SLACK_CREDENTIAL)
+        def envLabel = env.ENV_LABEL ?: params.DEPLOY_ENV
+        notifySlack(
+          slackCred,
+          "❌ ${env.APP_NAME} ${envLabel} deployment failed | Branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'main'} | Job: ${env.JOB_NAME} | Build: #${env.BUILD_NUMBER} | Check logs: ${env.BUILD_URL}"
+        )
       }
     }
 
     unstable {
       script {
-        withCredentials([string(credentialsId: "${env.SLACK_WEBHOOK_CREDENTIAL}", variable: 'SLACK_WEBHOOK_URL')]) {
-          sh '''
-            curl -sS -X POST -H "Content-type: application/json" \
-            --data "{
-              \\"text\\":\\"⚠️ ${APP_NAME} ${ENV_LABEL} deployment unstable | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
-            }" \
-            "$SLACK_WEBHOOK_URL"
-          '''
-        }
+        def slackCred = env.SLACK_WEBHOOK_CREDENTIAL ?: (params.DEPLOY_ENV == 'PROD' ? env.PROD_SLACK_CREDENTIAL : env.QA_SLACK_CREDENTIAL)
+        def envLabel = env.ENV_LABEL ?: params.DEPLOY_ENV
+        notifySlack(
+          slackCred,
+          "⚠️ ${env.APP_NAME} ${envLabel} deployment unstable | Branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'main'} | Job: ${env.JOB_NAME} | Build: #${env.BUILD_NUMBER} | ${env.BUILD_URL}"
+        )
       }
     }
 
@@ -333,5 +329,20 @@ pipeline {
         }
       }
     }
+  }
+}
+
+def notifySlack(String credentialId, String message) {
+  if (!credentialId?.trim()) {
+    echo "Slack notification skipped: credential ID missing"
+    return
+  }
+
+  withCredentials([string(credentialsId: credentialId, variable: 'SLACK_WEBHOOK_URL')]) {
+    sh """
+      curl -sS -X POST -H 'Content-type: application/json' \
+      --data '{"text":"${message.replace("'", "")}"}' \
+      "\$SLACK_WEBHOOK_URL"
+    """
   }
 }
