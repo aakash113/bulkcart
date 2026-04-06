@@ -37,7 +37,7 @@ pipeline {
             env.DEPLOY_HOST       = '18.222.163.244'
             env.DEPLOY_USER       = 'ec2-user'
             env.DEPLOY_APP_DIR    = '/home/ec2-user/bulkcart/qa'
-            env.SSH_CREDENTIAL_ID = 'dev-ec2-key'
+            env.SSH_CREDENTIAL_ID = 'main-ec2-key'
           } else if (params.DEPLOY_ENV == 'PROD') {
             env.ENV_NAME          = 'PROD'
             env.IMAGE_TAG         = 'prod'
