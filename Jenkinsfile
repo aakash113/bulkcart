@@ -130,12 +130,12 @@ pipeline {
 
     stage('Deploy') {
       steps {
-        sshagent(["${env.SSH_CREDENTIAL_ID}"]) {
+        withCredentials([sshUserPrivateKey(credentialsId: "${env.SSH_CREDENTIAL_ID}", keyFileVariable: 'SSH_KEY_FILE')]) {
           sh '''
             set -e
             echo "Deploying to ${ENV_NAME} EC2: $DEPLOY_HOST"
 
-            ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << EOF
+            ssh -i "$SSH_KEY_FILE" -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << EOF
               set -e
               mkdir -p ${DEPLOY_APP_DIR}
               cd ${DEPLOY_APP_DIR}
