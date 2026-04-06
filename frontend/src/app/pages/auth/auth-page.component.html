@@ -1,0 +1,146 @@
+<div class="page-shell">
+  <app-site-header mode="public"></app-site-header>
+
+  <section class="auth-layout">
+    <article class="auth-panel">
+      <span class="eyebrow">{{ mode() === 'login' ? 'Secure login' : 'Business onboarding' }}</span>
+      <h1>{{ heading() }}</h1>
+      <p>
+        Access the customer, vendor, and admin experiences from one branded BulkCart flow inspired by
+        your exported design.
+      </p>
+
+      <div class="role-tabs">
+        @for (role of roles; track role) {
+          <button
+            type="button"
+            [class.active]="selectedRole() === role"
+            [disabled]="mode() === 'signup' && role === 'admin'"
+            (click)="setRole(role)"
+          >
+            {{ role | titlecase }}
+          </button>
+        }
+      </div>
+
+      @if (errorMessage()) {
+        <p class="error-banner">{{ errorMessage() }}</p>
+      }
+
+      @if (infoMessage()) {
+        <p class="info-banner">{{ infoMessage() }}</p>
+      }
+
+      <form class="auth-form" (ngSubmit)="submit()">
+        @if (mode() === 'signup') {
+          <div class="grid two-up">
+            <label>
+              <span>Contact name</span>
+              <input [(ngModel)]="form.name" name="name" required />
+            </label>
+            <label>
+              <span>Company</span>
+              <input [(ngModel)]="form.company" name="company" required />
+            </label>
+          </div>
+
+          <div class="grid two-up">
+            <label>
+              <span>Phone</span>
+              <input [(ngModel)]="form.phone" name="phone" required />
+            </label>
+            <label>
+              <span>Location</span>
+              <input [(ngModel)]="form.location" name="location" required />
+            </label>
+          </div>
+
+          @if (selectedRole() === 'vendor') {
+            <label>
+              <span>Business description</span>
+              <textarea [(ngModel)]="form.businessDescription" name="businessDescription"></textarea>
+            </label>
+          }
+        }
+
+        <label>
+          <span>Email</span>
+          <input [ngModel]="form.email" (ngModelChange)="handleEmailChange($event)" name="email" type="email" required />
+        </label>
+
+        @if (mode() === 'signup') {
+          <div class="otp-shell">
+            <div class="otp-copy">
+              <strong>Email OTP verification</strong>
+              <small>Verify your email before account creation. The code is valid for 10 minutes.</small>
+              @if (otpCodeSent() && devOtpHint()) {
+                <small class="otp-dev-note">Dev OTP: {{ devOtpHint() }}</small>
+              }
+            </div>
+            <button type="button" class="otp-btn" (click)="sendOtp()" [disabled]="otpSending()">
+              {{ otpSending() ? 'Sending...' : otpCodeSent() ? 'Resend OTP' : 'Send OTP' }}
+            </button>
+          </div>
+
+          @if (otpCodeSent()) {
+            <div class="grid two-up otp-grid">
+              <label>
+                <span>OTP code</span>
+                <input [(ngModel)]="form.otpCode" name="otpCode" inputmode="numeric" maxlength="6" required />
+              </label>
+              <div class="otp-actions">
+                <span class="otp-state" [class.verified]="otpVerified()">
+                  {{ otpVerified() ? 'Email verified' : 'Verification pending' }}
+                </span>
+                <button type="button" class="verify-btn" (click)="verifyOtp()" [disabled]="otpVerifying() || otpVerified()">
+                  {{ otpVerified() ? 'Verified' : otpVerifying() ? 'Verifying...' : 'Verify OTP' }}
+                </button>
+              </div>
+            </div>
+          }
+        }
+
+        <label>
+          <span>Password</span>
+          <input [(ngModel)]="form.password" name="password" type="password" required />
+        </label>
+
+        @if (mode() === 'signup') {
+          <label>
+            <span>Confirm password</span>
+            <input [(ngModel)]="form.confirmPassword" name="confirmPassword" type="password" required />
+          </label>
+        }
+
+        <button class="submit-btn" type="submit" [disabled]="loading()">
+          {{ loading() ? 'Working…' : mode() === 'login' ? 'Sign in' : 'Create account' }}
+        </button>
+      </form>
+
+      <div class="auth-links">
+        <button type="button" (click)="useDemo(selectedRole())">Use demo credentials</button>
+        <button type="button" (click)="switchMode(mode() === 'login' ? 'signup' : 'login')">
+          {{ mode() === 'login' ? 'Need an account? Sign up' : 'Already have an account? Log in' }}
+        </button>
+      </div>
+    </article>
+
+    <article class="benefits-panel">
+      <h2>Built around three platform roles</h2>
+      <div class="benefit-list">
+        <article>
+          <strong>Customer</strong>
+          <p>Browse inventory, add to cart, place bulk orders, and monitor delivery progress.</p>
+        </article>
+        <article>
+          <strong>Vendor</strong>
+          <p>Publish products, define MOQ and tier pricing, and process wholesale orders.</p>
+        </article>
+        <article>
+          <strong>Admin</strong>
+          <p>Approve vendors, monitor disputes, and oversee the marketplace health end to end.</p>
+        </article>
+      </div>
+    </article>
+  </section>
+</div>

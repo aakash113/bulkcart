@@ -1,0 +1,285 @@
+<div class="page-shell">
+  <app-site-header mode="public"></app-site-header>
+
+  @if (experience(); as data) {
+    <section class="hero-panel">
+      <div class="hero-copy">
+        <span class="eyebrow">{{ data.hero.badge }}</span>
+        <h1>
+          Wholesale food
+          <span>procurement,</span>
+          simplified.
+        </h1>
+        <p>{{ data.hero.description }}</p>
+
+        <div class="hero-actions">
+          <a class="primary-cta" routerLink="/signup" [queryParams]="{ role: 'customer' }">Start Ordering Free</a>
+          <a class="secondary-cta" routerLink="/signup" [queryParams]="{ role: 'vendor' }">List Your Products</a>
+        </div>
+
+        <div class="hero-footnote">No credit card required · Free to join · Instant access</div>
+
+        <div class="hero-points">
+          @for (point of data.hero.points; track point) {
+            <span>{{ point }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="snapshot-card">
+        <div class="snapshot-header">
+          <div>
+            <h2>Live Platform Snapshot</h2>
+            <p>Updated 2 minutes ago</p>
+          </div>
+          <span class="snapshot-badge">47 buyers online</span>
+        </div>
+
+        <div class="snapshot-grid">
+          @for (stat of data.hero.stats; track stat.label) {
+            <article>
+              <strong>{{ stat.value }}</strong>
+              <span>{{ stat.label }}</span>
+            </article>
+          }
+        </div>
+
+        <div class="activity-list">
+          <span>Recent activity</span>
+          <div>Green Grocer placed an order <small>2m ago</small></div>
+          <div>Premium Foods restocked Basmati Rice <small>8m ago</small></div>
+          <div>City Cafe order delivered <small>15m ago</small></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="categories" class="section-card section-center">
+      <div class="section-heading center">
+        <h2>Browse by Category</h2>
+        <p>Over 1,200 wholesale food products across 8 major categories, sourced from verified US suppliers.</p>
+      </div>
+      <div class="category-grid">
+        @for (category of data.categories; track category.name) {
+          <article class="category-card">
+            <span class="category-icon">{{ iconForCategory(category.name) }}</span>
+            <strong>{{ category.name }}</strong>
+            <small>{{ category.count }} products</small>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="split-section">
+      <article class="compare-card danger">
+        <span class="mini-badge">The Old Way</span>
+        <h2>What food businesses struggle with</h2>
+        <div class="compare-list">
+          @for (item of painPoints.oldWay; track item) {
+            <div>{{ item }}</div>
+          }
+        </div>
+      </article>
+
+      <article class="compare-card success">
+        <span class="mini-badge good">The BulkCart Way</span>
+        <h2>How BulkCart fixes every pain point</h2>
+        <div class="compare-list">
+          @for (item of painPoints.bulkcartWay; track item) {
+            <div>{{ item }}</div>
+          }
+        </div>
+      </article>
+    </section>
+
+    <section id="roles" class="section-card section-center">
+      <div class="section-heading center">
+        <h2>Built for both sides of the supply chain</h2>
+        <p>Whether you're stocking shelves or filling purchase orders, BulkCart is built for you.</p>
+      </div>
+      <div class="audience-grid">
+        @for (card of roleCards; track card.title) {
+          <article class="audience-card" [class.vendor-card]="card.accent === 'vendor'">
+            <div class="audience-head">
+              <h3>{{ card.title }}</h3>
+              <p>{{ card.subtitle }}</p>
+            </div>
+            <ul>
+              @for (bullet of card.bullets; track bullet) {
+                <li>{{ bullet }}</li>
+              }
+            </ul>
+            <a
+              class="audience-cta"
+              [routerLink]="card.accent === 'vendor' ? '/signup' : '/signup'"
+              [queryParams]="{ role: card.accent === 'vendor' ? 'vendor' : 'customer' }"
+            >
+              {{ card.cta }}
+            </a>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="section-card section-center">
+      <div class="section-heading center">
+        <h2>How it Works</h2>
+        <p>Get started in minutes, not days.</p>
+      </div>
+
+      <div class="mode-toggle">
+        <button type="button" [class.active]="howItWorksMode() === 'buyers'" (click)="howItWorksMode.set('buyers')">For Buyers</button>
+        <button type="button" [class.active]="howItWorksMode() === 'suppliers'" (click)="howItWorksMode.set('suppliers')">For Suppliers</button>
+      </div>
+
+      <div class="steps-grid">
+        @for (step of activeSteps(); track step.title) {
+          <article class="step-card">
+            <span class="step-label">{{ step.step }}</span>
+            <div class="step-icon">{{ step.icon }}</div>
+            <h3>{{ step.title }}</h3>
+            <ul>
+              @for (bullet of step.bullets; track bullet) {
+                <li>{{ bullet }}</li>
+              }
+            </ul>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="section-card section-center">
+      <div class="section-heading center">
+        <h2>What our users say</h2>
+        <p>Trusted by hundreds of food businesses across the US.</p>
+      </div>
+      <div class="testimonial-grid">
+        @for (testimonial of testimonials; track testimonial.author) {
+          <article class="testimonial-card">
+            <div class="stars">★★★★★</div>
+            <p>"{{ testimonial.quote }}"</p>
+            <footer>
+              <span class="avatar">{{ testimonial.initials }}</span>
+              <div>
+                <strong>{{ testimonial.author }}</strong>
+                <small>{{ testimonial.role }}</small>
+              </div>
+              <span class="tag">{{ testimonial.tag }}</span>
+            </footer>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section id="pricing" class="section-card section-center">
+      <div class="section-heading center">
+        <h2>Transparent Pricing</h2>
+        <p>Buyers join for free. Supplier plans scale with your business.</p>
+      </div>
+      <div class="pricing-grid">
+        @for (plan of pricingPlans; track plan.name) {
+          <article class="pricing-card" [class.featured]="plan.featured" [class.enterprise]="plan.accent === 'enterprise'">
+            @if (plan.featured) {
+              <span class="popular-badge">Most Popular</span>
+            }
+            <span class="plan-audience">{{ plan.audience }}</span>
+            <h3>{{ plan.name }}</h3>
+            <div class="plan-price">
+              {{ plan.price }}<small>{{ plan.suffix }}</small>
+            </div>
+            <ul>
+              @for (bullet of plan.bullets; track bullet) {
+                <li>{{ bullet }}</li>
+              }
+            </ul>
+            <a
+              class="plan-cta"
+              [routerLink]="plan.accent === 'vendor' ? '/signup' : '/signup'"
+              [queryParams]="{ role: plan.accent === 'vendor' ? 'vendor' : 'customer' }"
+            >
+              {{ plan.cta }}
+            </a>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="section-card section-center faq-shell">
+      <div class="section-heading center">
+        <h2>Frequently Asked Questions</h2>
+        <p>Everything you need to know before getting started.</p>
+      </div>
+      <div class="faq-stack">
+        @for (item of faqEntries; track item.question; let i = $index) {
+          <article class="faq-item" [class.open]="openFaqIndex() === i">
+            <button type="button" (click)="toggleFaq(i)">
+              <span>{{ item.question }}</span>
+              <span>{{ openFaqIndex() === i ? '−' : '+' }}</span>
+            </button>
+            @if (openFaqIndex() === i) {
+              <p>{{ item.answer }}</p>
+            }
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <div class="cta-copy">
+        <h2>Ready to modernize your food procurement?</h2>
+        <p>Join 480+ food businesses already saving time and money with BulkCart.</p>
+        <small>Free for buyers · 14-day supplier trial · No contracts</small>
+      </div>
+      <div class="cta-actions">
+        <a class="light-cta" routerLink="/signup" [queryParams]="{ role: 'customer' }">Join as a Buyer (Free)</a>
+        <a class="green-cta" routerLink="/signup" [queryParams]="{ role: 'vendor' }">Become a Supplier</a>
+      </div>
+    </section>
+
+    <footer class="footer-shell">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="footer-logo">BC</div>
+          <div>
+            <strong>BulkCart</strong>
+            <p>The B2B wholesale food platform connecting verified retailers with trusted suppliers across the United States.</p>
+          </div>
+        </div>
+
+        <div class="footer-links">
+          <div>
+            <strong>Platform</strong>
+            <a routerLink="/catalog">Product Catalog</a>
+            <a href="#pricing">Pricing Plans</a>
+            <a href="#roles">For Retailers</a>
+            <a href="#roles">For Suppliers</a>
+          </div>
+          <div>
+            <strong>Company</strong>
+            <a href="#categories">About Us</a>
+            <a href="#categories">Blog</a>
+            <a href="#categories">Careers</a>
+            <a href="#categories">Contact</a>
+          </div>
+          <div>
+            <strong>Legal</strong>
+            <a href="#categories">Privacy Policy</a>
+            <a href="#categories">Terms of Service</a>
+            <a href="#categories">Supplier Agreement</a>
+            <a href="#categories">FSMA Compliance</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span>© 2026 BulkCart Inc. All rights reserved.</span>
+        <div>
+          <span>SSL Secured</span>
+          <span>FSMA Compliant</span>
+          <span>Made in the USA</span>
+        </div>
+      </div>
+    </footer>
+  } @else {
+    <section class="loading-card">Loading BulkCart experience…</section>
+  }
+</div>

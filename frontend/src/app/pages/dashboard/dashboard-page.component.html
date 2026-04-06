@@ -1,0 +1,120 @@
+<div class="page-shell">
+  <app-site-header mode="private"></app-site-header>
+
+  @if (data(); as dashboard) {
+    <section class="headline-card">
+      <span class="eyebrow">{{ role() | titlecase }} dashboard</span>
+      <h1>{{ dashboard.headline }}</h1>
+      @if (notice()) {
+        <p class="notice-banner">{{ notice() }}</p>
+      }
+    </section>
+
+    <section class="stats-grid">
+      @for (stat of dashboard.stats; track stat.label) {
+        <article>
+          <strong>{{ stat.value }}</strong>
+          <span>{{ stat.label }}</span>
+        </article>
+      }
+    </section>
+
+    <section class="detail-grid">
+      @if (dashboard.charts; as charts) {
+        @for (entry of charts | keyvalue; track entry.key) {
+          <article class="panel-card">
+            <h2>{{ entry.key | titlecase }}</h2>
+            <div class="chart-stack">
+              @for (point of entry.value; track point.label) {
+                <div class="chart-row">
+                  <span>{{ point.label }}</span>
+                  <div class="bar-track"><div class="bar-fill" [style.width]="barWidth(point.value, entry.value)"></div></div>
+                  <strong>{{ point.value }}</strong>
+                </div>
+              }
+            </div>
+          </article>
+        }
+      }
+
+      @if (dashboard.quickActions?.length) {
+        <article class="panel-card">
+          <h2>Quick actions</h2>
+          <ul>
+            @for (action of dashboard.quickActions; track action) {
+              <li>{{ action }}</li>
+            }
+          </ul>
+        </article>
+      }
+
+      @if (dashboard.productHealth?.length) {
+        <article class="panel-card">
+          <h2>Catalog health</h2>
+          <div class="list-stack">
+            @for (product of dashboard.productHealth; track product.id) {
+              <div class="list-row">
+                <strong>{{ product.name }}</strong>
+                <span>{{ product.inventory }} in stock · MOQ {{ product.minOrderQuantity }} · {{ product.leadTimeDays }}d lead time</span>
+              </div>
+            }
+          </div>
+        </article>
+      }
+
+      @if (dashboard.approvals?.length) {
+        <article class="panel-card">
+          <h2>Vendor approvals</h2>
+          <div class="list-stack">
+            @for (approval of dashboard.approvals; track approval.id) {
+              <div class="list-row action-row">
+                <div>
+                  <strong>{{ approval.company }}</strong>
+                  <span>{{ approval.contact }} · {{ approval.location }} · {{ approval.approved ? 'Approved' : 'Pending' }}</span>
+                </div>
+                @if (!approval.approved) {
+                  <button
+                    type="button"
+                    class="action-btn"
+                    (click)="approveVendor(approval.id)"
+                    [disabled]="actionVendorId() === approval.id"
+                  >
+                    {{ actionVendorId() === approval.id ? 'Approving...' : 'Approve vendor' }}
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        </article>
+      }
+
+      @if (dashboard.disputes?.length) {
+        <article class="panel-card">
+          <h2>Marketplace disputes</h2>
+          <div class="list-stack">
+            @for (dispute of dashboard.disputes; track dispute.id) {
+              <div class="list-row">
+                <strong>{{ dispute.id }}</strong>
+                <span>{{ dispute.orderId }} · {{ dispute.reason }} · {{ dispute.status }}</span>
+              </div>
+            }
+          </div>
+        </article>
+      }
+
+      @if (dashboard.recentOrders?.length) {
+        <article class="panel-card">
+          <h2>Recent orders</h2>
+          <div class="list-stack">
+            @for (order of dashboard.recentOrders; track order.id) {
+              <div class="list-row">
+                <strong>{{ order.id }} · {{ order.status }}</strong>
+                <span>{{ order.total | currency }} · {{ order.vendorName }}</span>
+              </div>
+            }
+          </div>
+        </article>
+      }
+    </section>
+  }
+</div>

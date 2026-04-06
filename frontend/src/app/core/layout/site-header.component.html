@@ -1,0 +1,58 @@
+<header class="header-shell">
+  @if (mode === 'public') {
+    <div class="public-top">
+      <a routerLink="/" class="brand brand-light">
+        <span class="brand-mark">BC</span>
+        <span>
+          <strong>BulkCart</strong>
+          <small>Wholesale Made Simple</small>
+        </span>
+      </a>
+      <div class="actions">
+        <button class="ghost-btn dark-ghost" type="button" (click)="navigateToPrimaryFlow('login')">Sign In</button>
+        <button class="primary-btn compact" type="button" (click)="navigateToPrimaryFlow('signup')">Join Free</button>
+      </div>
+    </div>
+
+    <div class="utility-bar public-utility">
+      <div class="status-line">
+        <span class="status-item">Serving 12 cities across the US</span>
+        <span class="live-dot">Platform Live</span>
+      </div>
+      <div class="utility-links">
+        <a routerLink="/login">Sign In</a>
+        <a routerLink="/signup">Join Free</a>
+        <a routerLink="/login" [queryParams]="{ role: 'admin' }">Admin Portal</a>
+      </div>
+    </div>
+  } @else {
+    <div class="main-bar">
+      <a routerLink="/" class="brand">
+        <span class="brand-mark">BC</span>
+        <span>
+          <strong>BulkCart</strong>
+          <small>B2B sourcing platform</small>
+        </span>
+      </a>
+      <nav class="nav-links">
+        <a routerLink="/catalog">Catalog</a>
+        <a routerLink="/orders">Orders</a>
+        @if (user()?.role === 'customer') {
+          <a routerLink="/cart">Cart</a>
+        }
+        @if (user(); as currentUser) {
+          <a [routerLink]="auth.dashboardRouteFor(currentUser.role)">Dashboard</a>
+        }
+      </nav>
+      <div class="session-block">
+        @if (user(); as currentUser) {
+          <div class="user-copy">
+            <strong>{{ currentUser.company }}</strong>
+            <small>{{ currentUser.role | titlecase }}</small>
+          </div>
+        }
+        <button class="ghost-btn" type="button" (click)="auth.logout()">Logout</button>
+      </div>
+    </div>
+  }
+</header>

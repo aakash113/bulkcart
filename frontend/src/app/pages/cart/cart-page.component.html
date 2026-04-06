@@ -1,0 +1,144 @@
+<div class="page-shell">
+  <app-site-header mode="private"></app-site-header>
+
+  <section class="page-hero">
+    <div>
+      <span class="eyebrow">Cart & checkout</span>
+      <h1>Review MOQ pricing, service fees, and the final order total.</h1>
+    </div>
+    <a class="cta-link" routerLink="/catalog">Back to catalog</a>
+  </section>
+
+  @if (notice()) {
+    <p class="notice-banner">{{ notice() }}</p>
+  }
+
+  @if (cart(); as cartData) {
+    <section class="cart-layout">
+      @if (cartData.items.length) {
+        <div class="cart-list">
+          @for (item of cartData.items; track item.product.id) {
+            <article class="cart-item">
+              <img [src]="item.product.image" [alt]="item.product.name" />
+              <div class="cart-copy">
+                <div>
+                  <h2>{{ item.product.name }}</h2>
+                  <p>{{ item.product.supplierName }} · {{ item.product.unit }}</p>
+                </div>
+                <div class="item-actions">
+                  <button
+                    type="button"
+                    (click)="changeQuantity(item.product.id, item.quantity - item.product.minOrderQuantity)"
+                  >
+                    - MOQ
+                  </button>
+                  <button
+                    type="button"
+                    (click)="changeQuantity(item.product.id, item.quantity + item.product.minOrderQuantity)"
+                  >
+                    + MOQ
+                  </button>
+                  <button type="button" (click)="removeItem(item.product.id)">Remove</button>
+                </div>
+              </div>
+              <div class="cart-price">
+                <strong>{{ item.subtotal | currency }}</strong>
+                <span>{{ item.quantity }} units at {{ item.unitPrice | currency }}</span>
+              </div>
+            </article>
+          }
+        </div>
+      } @else {
+        <section class="empty-card">
+          <h2>Your cart is empty</h2>
+          <p>Browse the live catalog and add MOQ-sized quantities to start a bulk order.</p>
+          <a class="cta-link" routerLink="/catalog">Browse catalog</a>
+        </section>
+      }
+
+      <aside class="summary-card">
+        <h2>Order summary</h2>
+        <div class="summary-line"><span>Subtotal</span><strong>{{ cartData.summary.subtotal | currency }}</strong></div>
+        <div class="summary-line"><span>Platform fee</span><strong>{{ cartData.summary.serviceFee | currency }}</strong></div>
+        <div class="summary-line"><span>Shipping</span><strong>{{ cartData.summary.shipping | currency }}</strong></div>
+        <div class="summary-line total"><span>Total</span><strong>{{ cartData.summary.total | currency }}</strong></div>
+
+        <section class="payment-card">
+          <div class="payment-heading">
+            <strong>Payment gateway</strong>
+            <small>BulkCart Pay authorization before order capture</small>
+          </div>
+
+          @if (paymentMessage()) {
+            <p class="payment-banner">{{ paymentMessage() }}</p>
+          }
+
+          <label>
+            <span>Card holder</span>
+            <input [(ngModel)]="paymentForm.cardHolder" name="cardHolder" />
+          </label>
+
+          <label>
+            <span>Card number</span>
+            <input
+              [ngModel]="paymentForm.cardNumber"
+              (ngModelChange)="formatCardNumber($event)"
+              name="cardNumber"
+              inputmode="numeric"
+              placeholder="4242 4242 4242 4242"
+            />
+          </label>
+
+          <div class="payment-grid">
+            <label>
+              <span>Expiry month</span>
+              <input
+                [ngModel]="paymentForm.expiryMonth"
+                (ngModelChange)="digitsOnly('expiryMonth', $event, 2)"
+                name="expiryMonth"
+                inputmode="numeric"
+                placeholder="MM"
+              />
+            </label>
+            <label>
+              <span>Expiry year</span>
+              <input
+                [ngModel]="paymentForm.expiryYear"
+                (ngModelChange)="digitsOnly('expiryYear', $event, 4)"
+                name="expiryYear"
+                inputmode="numeric"
+                placeholder="YYYY"
+              />
+            </label>
+          </div>
+
+          <div class="payment-grid">
+            <label>
+              <span>CVV</span>
+              <input
+                [ngModel]="paymentForm.cvv"
+                (ngModelChange)="digitsOnly('cvv', $event, 4)"
+                name="cvv"
+                inputmode="numeric"
+                placeholder="123"
+              />
+            </label>
+            <label>
+              <span>Billing ZIP</span>
+              <input
+                [ngModel]="paymentForm.billingZip"
+                (ngModelChange)="formatBillingZip($event)"
+                name="billingZip"
+                placeholder="10001"
+              />
+            </label>
+          </div>
+        </section>
+
+        <button type="button" class="checkout-btn" (click)="checkout()" [disabled]="!canCheckout()">
+          {{ processingPayment() ? 'Authorizing payment...' : 'Pay & place order' }}
+        </button>
+      </aside>
+    </section>
+  }
+</div>

@@ -1,0 +1,129 @@
+<div class="page-shell">
+  <app-site-header mode="private"></app-site-header>
+
+  <section class="catalog-hero">
+    <div class="catalog-hero-copy">
+      <span class="eyebrow">Bulk catalog</span>
+      <h1>Compare verified products, MOQ, lead time, and tier pricing.</h1>
+      <p>Browse the same supplier-first marketplace experience shown on the landing page, now with real data from the API.</p>
+    </div>
+    <div class="catalog-hero-stats">
+      <article>
+        <strong>{{ products().length }}</strong>
+        <span>Live SKUs</span>
+      </article>
+      <article>
+        <strong>38</strong>
+        <span>Verified suppliers</span>
+      </article>
+      <a class="cta-link" routerLink="/cart">View Cart</a>
+    </div>
+  </section>
+
+  @if (notice()) {
+    <p class="notice-banner">{{ notice() }}</p>
+  }
+
+  <section class="catalog-layout">
+    <aside class="filters-card">
+      <label>
+        <span>Search</span>
+        <input
+          [ngModel]="filters.search()"
+          (ngModelChange)="filters.search.set($event); reloadProducts()"
+          placeholder="Rice, oil, supplier..."
+        />
+      </label>
+
+      <label>
+        <span>Category</span>
+        <select [ngModel]="filters.category()" (ngModelChange)="filters.category.set($event); reloadProducts()">
+          <option value="">All categories</option>
+          @for (category of availableFilters()?.categories ?? []; track category) {
+            <option [value]="category">{{ category }}</option>
+          }
+        </select>
+      </label>
+
+      <label>
+        <span>Sort</span>
+        <select [ngModel]="filters.sort()" (ngModelChange)="filters.sort.set($event); reloadProducts()">
+          <option value="featured">Featured</option>
+          <option value="rating">Highest rating</option>
+          <option value="price-asc">Price low to high</option>
+          <option value="price-desc">Price high to low</option>
+          <option value="lead-time">Fastest delivery</option>
+        </select>
+      </label>
+
+      <div class="filter-group">
+        <strong>Certifications</strong>
+        <div class="pill-grid">
+          @for (certification of availableFilters()?.certifications ?? []; track certification) {
+            <button
+              type="button"
+              [class.active]="filters.certifications().includes(certification)"
+              (click)="toggleCertification(certification)"
+            >
+              {{ certification }}
+            </button>
+          }
+        </div>
+      </div>
+    </aside>
+
+    <div class="product-grid">
+      @for (product of products(); track product.id) {
+        <article class="product-card">
+          <img [src]="product.image" [alt]="product.name" />
+          <div class="product-copy">
+            <div class="product-meta">
+              <span>{{ product.category }}</span>
+              <span>{{ product.origin }}</span>
+            </div>
+            <h2>{{ product.name }}</h2>
+            <p>{{ product.description }}</p>
+            <div class="supplier-line">
+              <strong>{{ product.supplierName }}</strong>
+              <span>{{ product.rating | number: '1.1-1' }}/5 · {{ product.reviews }} reviews</span>
+            </div>
+            <div class="stats-grid">
+              <article>
+                <strong>{{ product.price | currency }}</strong>
+                <span>{{ product.unit }}</span>
+              </article>
+              <article>
+                <strong>{{ product.minOrderQuantity }}</strong>
+                <span>MOQ</span>
+              </article>
+              <article>
+                <strong>{{ product.leadTimeDays }} days</strong>
+                <span>Lead time</span>
+              </article>
+            </div>
+            <div class="sku-line">
+              <span>SKU {{ product.sku }}</span>
+              <span>{{ product.inventory }} units in stock</span>
+            </div>
+            <div class="tag-row">
+              @for (certification of product.certifications; track certification) {
+                <span>{{ certification }}</span>
+              }
+            </div>
+            <div class="tier-pricing">
+              @for (tier of product.tierPricing; track tier.minQty) {
+                <div>
+                  <strong>{{ tier.minQty }}+</strong>
+                  <span>{{ tier.price | currency }}</span>
+                </div>
+              }
+            </div>
+            <button type="button" class="add-btn" (click)="addToCart(product.id, product.minOrderQuantity)">
+              Add MOQ to cart
+            </button>
+          </div>
+        </article>
+      }
+    </div>
+  </section>
+</div>

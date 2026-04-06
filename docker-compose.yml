@@ -18,10 +18,16 @@ services:
     restart: always
     env_file:
       - .env
+    environment:
+      MONGO_URI: mongodb://mongo:27017/bulkcart_dev
     ports:
       - "3000:3000"
     depends_on:
       - mongo
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: npm run start:dev
 
   frontend:
     build:
@@ -33,6 +39,9 @@ services:
       - "4200:4200"
     depends_on:
       - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
 
 volumes:
   mongo_data:

@@ -1,0 +1,74 @@
+<div class="page-shell">
+  <app-site-header mode="private"></app-site-header>
+
+  <section class="hero-card">
+    <div>
+      <span class="eyebrow">Orders</span>
+      <h1>Track current shipments, approvals, and recently delivered bulk orders.</h1>
+    </div>
+  </section>
+
+  @if (orders(); as ordersData) {
+    @if (ordersData.items.length) {
+      <section class="summary-grid">
+        <article>
+          <strong>{{ ordersData.summary.totalOrders }}</strong>
+          <span>Total orders</span>
+        </article>
+        <article>
+          <strong>{{ ordersData.summary.totalRevenue | currency }}</strong>
+          <span>Total value</span>
+        </article>
+        <article>
+          <strong>{{ ordersData.summary.openOrders }}</strong>
+          <span>Open orders</span>
+        </article>
+      </section>
+
+      <section class="order-stack">
+        @for (order of ordersData.items; track order.id) {
+          <article class="order-card">
+            <div class="order-topline">
+              <div>
+                <strong>{{ order.id }}</strong>
+                <span>{{ order.createdAt | date: 'mediumDate' }}</span>
+              </div>
+              <span class="status-pill">{{ order.status }}</span>
+            </div>
+            <div class="order-grid">
+              <div>
+                <span class="label">Buyer</span>
+                <p>{{ order.customerName }}</p>
+              </div>
+              <div>
+                <span class="label">Vendor</span>
+                <p>{{ order.vendorName }}</p>
+              </div>
+              <div>
+                <span class="label">ETA</span>
+                <p>{{ order.eta | date: 'mediumDate' }}</p>
+              </div>
+              <div>
+                <span class="label">Value</span>
+                <p>{{ order.total | currency }}</p>
+              </div>
+            </div>
+            <div class="line-items">
+              @for (item of order.items; track item.productId) {
+                <div>
+                  <span>{{ item.name }}</span>
+                  <strong>{{ item.quantity }} × {{ item.unitPrice | currency }}</strong>
+                </div>
+              }
+            </div>
+          </article>
+        }
+      </section>
+    } @else {
+      <section class="hero-card">
+        <h2>No orders yet</h2>
+        <p>Your placed orders will appear here once you check out from the catalog.</p>
+      </section>
+    }
+  }
+</div>
