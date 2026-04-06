@@ -8,29 +8,26 @@ pipeline {
   options {
     disableConcurrentBuilds()
     buildDiscarder(logRotator(numToKeepStr: '20'))
+    timestamps()
   }
 
   parameters {
     choice(
-      name: 'TARGET_ENV',
+      name: 'DEPLOY_ENV',
       choices: ['QA', 'PROD'],
-      description: 'Select environment to deploy'
+      description: 'Choose the environment to deploy'
     )
     booleanParam(
-      name: 'RUN_TESTRIGOR',
+      name: 'RUN_QA_SMOKE',
       defaultValue: true,
-      description: 'Run testRigor smoke test after QA deployment'
+      description: 'Run QA smoke tests after QA deployment'
     )
   }
 
   environment {
-    DOCKER_CREDS      = credentials('docker-hub-creds')
-    DOCKER_USER       = 'aakash113'
-    SLACK_WEBHOOK     = credentials('slack-webhook')
-    TESTRIGOR_TOKEN   = credentials('testrigor-token')
-    TESTRIGOR_APPID_QA = credentials('testrigor-appid-qa')
-    APP_NAME          = 'BulkCart'
-    DEPLOY_USER       = 'ec2-user'
+    APP_NAME    = 'BulkCart'
+    DOCKER_USER = 'aakash113'
+    DEPLOY_USER = 'ec2-user'
   }
 
   stages {
@@ -44,53 +41,57 @@ pipeline {
       }
     }
 
-    stage('Set Deployment Config') {
+    stage('Set Environment Config') {
       steps {
         script {
-          if (params.TARGET_ENV == 'QA') {
-            env.IMAGE_TAG         = 'qa'
-            env.DEPLOY_HOST       = '18.222.163.244'
-            env.DEPLOY_APP_DIR    = '/home/ec2-user/bulkcart/qa'
-            env.SSH_CREDENTIAL_ID = 'qa-ec2-key'
-            env.SLACK_AUDIENCE    = 'QA'
-            env.RUN_QA_SMOKE      = params.RUN_TESTRIGOR.toString()
-          } else if (params.TARGET_ENV == 'PROD') {
-            env.IMAGE_TAG         = 'prod'
-            env.DEPLOY_HOST       = '18.222.126.228'
-            env.DEPLOY_APP_DIR    = '/home/ec2-user/bulkcart/prod'
-            env.SSH_CREDENTIAL_ID = 'main-ec2-key'
-            env.SLACK_AUDIENCE    = 'PROD'
-            env.RUN_QA_SMOKE      = 'false'
+          if (params.DEPLOY_ENV == 'QA') {
+            env.IMAGE_TAG                  = 'qa'
+            env.DEPLOY_HOST                = '18.222.163.244'
+            env.DEPLOY_APP_DIR             = '/home/ec2-user/bulkcart/qa'
+            env.SSH_CREDENTIAL_ID          = 'qa-ec2-key'
+            env.SLACK_WEBHOOK_CREDENTIAL   = 'slack-webhook-qa'
+            env.TESTRIGOR_APPID_CREDENTIAL = 'testrigor-appid-qa'
+            env.ENV_LABEL                  = 'QA'
+          } else if (params.DEPLOY_ENV == 'PROD') {
+            env.IMAGE_TAG                  = 'prod'
+            env.DEPLOY_HOST                = '18.222.126.228'
+            env.DEPLOY_APP_DIR             = '/home/ec2-user/bulkcart/prod'
+            env.SSH_CREDENTIAL_ID          = 'main-ec2-key'
+            env.SLACK_WEBHOOK_CREDENTIAL   = 'slack-webhook-prod'
+            env.TESTRIGOR_APPID_CREDENTIAL = ''
+            env.ENV_LABEL                  = 'PROD'
           } else {
-            error("Unsupported TARGET_ENV: ${params.TARGET_ENV}")
+            error("Unsupported DEPLOY_ENV: ${params.DEPLOY_ENV}")
           }
 
-          echo "TARGET_ENV        = ${params.TARGET_ENV}"
-          echo "IMAGE_TAG         = ${env.IMAGE_TAG}"
-          echo "DEPLOY_HOST       = ${env.DEPLOY_HOST}"
-          echo "DEPLOY_USER       = ${env.DEPLOY_USER}"
-          echo "DEPLOY_APP_DIR    = ${env.DEPLOY_APP_DIR}"
-          echo "SSH_CREDENTIAL_ID = ${env.SSH_CREDENTIAL_ID}"
+          echo "DEPLOY_ENV               = ${params.DEPLOY_ENV}"
+          echo "IMAGE_TAG                = ${env.IMAGE_TAG}"
+          echo "DEPLOY_HOST              = ${env.DEPLOY_HOST}"
+          echo "DEPLOY_APP_DIR           = ${env.DEPLOY_APP_DIR}"
+          echo "SSH_CREDENTIAL_ID        = ${env.SSH_CREDENTIAL_ID}"
+          echo "SLACK_WEBHOOK_CREDENTIAL = ${env.SLACK_WEBHOOK_CREDENTIAL}"
         }
       }
     }
 
     stage('Slack Notify Start') {
       steps {
-        sh '''
-          curl -sS -X POST -H "Content-type: application/json" \
-          --data "{
-            \\"text\\":\\"🚀 ${APP_NAME} ${SLACK_AUDIENCE} deployment started | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
-          }" \
-          "$SLACK_WEBHOOK"
-        '''
+        withCredentials([string(credentialsId: "${env.SLACK_WEBHOOK_CREDENTIAL}", variable: 'SLACK_WEBHOOK_URL')]) {
+          sh '''
+            curl -sS -X POST -H "Content-type: application/json" \
+            --data "{
+              \\"text\\":\\"🚀 ${APP_NAME} ${ENV_LABEL} deployment started | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
+            }" \
+            "$SLACK_WEBHOOK_URL"
+          '''
+        }
       }
     }
 
     stage('Sanity Check') {
       steps {
         sh 'echo "Branch: $BRANCH_NAME"'
-        sh 'echo "Target Env: $TARGET_ENV"'
+        sh 'echo "Deploy Env: $DEPLOY_ENV"'
         sh 'node -v'
         sh 'npm -v || true'
         sh 'docker -v'
@@ -125,7 +126,9 @@ pipeline {
 
     stage('CD: Docker Login') {
       steps {
-        sh 'echo "$DOCKER_CREDS_PSW" | docker login -u "$DOCKER_CREDS_USR" --password-stdin'
+        withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_PASS')]) {
+          sh 'echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin'
+        }
       }
     }
 
@@ -151,7 +154,7 @@ pipeline {
         sh '''
           docker buildx build \
             --platform linux/amd64 \
-            -t aakash113/bulkcart-backend:${IMAGE_TAG} \
+            -t ${DOCKER_USER}/bulkcart-backend:${IMAGE_TAG} \
             --push \
             ./backend
         '''
@@ -163,19 +166,19 @@ pipeline {
         sh '''
           docker buildx build \
             --platform linux/amd64 \
-            -t aakash113/bulkcart-frontend:${IMAGE_TAG} \
+            -t ${DOCKER_USER}/bulkcart-frontend:${IMAGE_TAG} \
             --push \
             ./frontend
         '''
       }
     }
 
-    stage('Approve Production Deployment') {
+    stage('Approve PROD') {
       when {
-        expression { return params.TARGET_ENV == 'PROD' }
+        expression { params.DEPLOY_ENV == 'PROD' }
       }
       steps {
-        input message: 'Deploy BulkCart to PROD?', ok: 'Deploy to PROD'
+        input message: 'Approve BulkCart PROD deployment?', ok: 'Deploy PROD'
       }
     }
 
@@ -184,7 +187,7 @@ pipeline {
         sshagent(credentials: ["${env.SSH_CREDENTIAL_ID}"]) {
           sh '''
             set -e
-            echo "Deploying ${TARGET_ENV} to ${DEPLOY_HOST}"
+            echo "Deploying ${DEPLOY_ENV} to ${DEPLOY_HOST}"
 
             ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << EOF
               set -e
@@ -197,8 +200,8 @@ pipeline {
               ls -la
 
               echo "Pulling latest images..."
-              docker pull aakash113/bulkcart-backend:${IMAGE_TAG}
-              docker pull aakash113/bulkcart-frontend:${IMAGE_TAG}
+              docker pull ${DOCKER_USER}/bulkcart-backend:${IMAGE_TAG}
+              docker pull ${DOCKER_USER}/bulkcart-frontend:${IMAGE_TAG}
 
               echo "Restarting services..."
               docker compose down || true
@@ -214,94 +217,111 @@ pipeline {
               echo "Running containers:"
               docker ps
 
-              echo "${TARGET_ENV} deployment complete."
+              echo "${DEPLOY_ENV} deployment complete."
             EOF
           '''
         }
       }
     }
 
-    stage('QA Smoke: testRigor') {
+    stage('QA Smoke Test') {
       when {
         allOf {
-          expression { return params.TARGET_ENV == 'QA' }
-          expression { return params.RUN_TESTRIGOR }
+          expression { params.DEPLOY_ENV == 'QA' }
+          expression { params.RUN_QA_SMOKE }
         }
       }
       steps {
-        sh '''
-          set -e
+        withCredentials([
+          string(credentialsId: 'testrigor-token', variable: 'TESTRIGOR_TOKEN'),
+          string(credentialsId: "${env.TESTRIGOR_APPID_CREDENTIAL}", variable: 'TESTRIGOR_APPID')
+        ]) {
+          sh '''
+            set -e
 
-          echo "Triggering testRigor for QA..."
-          curl -sS -X POST \
-            -H "Content-type: application/json" \
-            -H "auth-token: ${TESTRIGOR_TOKEN}" \
-            "https://api.testrigor.com/api/v1/apps/${TESTRIGOR_APPID_QA}/retest" >/dev/null
-
-          echo "Waiting before polling..."
-          sleep 10
-
-          for i in $(seq 1 60); do
-            resp=$(curl -sS -i -X GET \
+            echo "Triggering testRigor for QA..."
+            curl -sS -X POST \
+              -H "Content-type: application/json" \
               -H "auth-token: ${TESTRIGOR_TOKEN}" \
-              -H "Accept: application/json" \
-              "https://api.testrigor.com/api/v1/apps/${TESTRIGOR_APPID_QA}/status")
+              "https://api.testrigor.com/api/v1/apps/${TESTRIGOR_APPID}/retest" >/dev/null
 
-            code=$(echo "$resp" | awk 'NR==1{print $2}')
-            echo "testRigor status HTTP: $code"
-
-            if [ "$code" = "200" ]; then
-              echo "QA smoke PASS"
-              exit 0
-            elif [ "$code" = "230" ]; then
-              echo "QA smoke FAIL"
-              exit 1
-            elif [ "$code" = "227" ] || [ "$code" = "228" ]; then
-              echo "QA smoke still running..."
-            else
-              echo "Unexpected testRigor status: $code"
-              exit 1
-            fi
-
+            echo "Waiting before polling..."
             sleep 10
-          done
 
-          echo "QA smoke timeout"
-          exit 1
-        '''
+            for i in $(seq 1 60); do
+              resp=$(curl -sS -i -X GET \
+                -H "auth-token: ${TESTRIGOR_TOKEN}" \
+                -H "Accept: application/json" \
+                "https://api.testrigor.com/api/v1/apps/${TESTRIGOR_APPID}/status")
+
+              code=$(echo "$resp" | awk 'NR==1{print $2}')
+              echo "testRigor status HTTP: $code"
+
+              if [ "$code" = "200" ]; then
+                echo "QA smoke PASS"
+                exit 0
+              elif [ "$code" = "230" ]; then
+                echo "QA smoke FAIL"
+                exit 1
+              elif [ "$code" = "227" ] || [ "$code" = "228" ]; then
+                echo "QA smoke still running..."
+              else
+                echo "Unexpected testRigor status: $code"
+                exit 1
+              fi
+
+              sleep 10
+            done
+
+            echo "QA smoke timeout"
+            exit 1
+          '''
+        }
       }
     }
   }
 
   post {
     success {
-      sh '''
-        curl -sS -X POST -H "Content-type: application/json" \
-        --data "{
-          \\"text\\":\\"✅ ${APP_NAME} ${SLACK_AUDIENCE} deployment successful | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
-        }" \
-        "$SLACK_WEBHOOK"
-      '''
+      script {
+        withCredentials([string(credentialsId: "${env.SLACK_WEBHOOK_CREDENTIAL}", variable: 'SLACK_WEBHOOK_URL')]) {
+          sh '''
+            curl -sS -X POST -H "Content-type: application/json" \
+            --data "{
+              \\"text\\":\\"✅ ${APP_NAME} ${ENV_LABEL} deployment successful | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
+            }" \
+            "$SLACK_WEBHOOK_URL"
+          '''
+        }
+      }
     }
 
     failure {
-      sh '''
-        curl -sS -X POST -H "Content-type: application/json" \
-        --data "{
-          \\"text\\":\\"❌ ${APP_NAME} ${SLACK_AUDIENCE} deployment failed | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | Check logs: ${BUILD_URL}\\"
-        }" \
-        "$SLACK_WEBHOOK"
-      '''
+      script {
+        withCredentials([string(credentialsId: "${env.SLACK_WEBHOOK_CREDENTIAL}", variable: 'SLACK_WEBHOOK_URL')]) {
+          sh '''
+            curl -sS -X POST -H "Content-type: application/json" \
+            --data "{
+              \\"text\\":\\"❌ ${APP_NAME} ${ENV_LABEL} deployment failed | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | Check logs: ${BUILD_URL}\\"
+            }" \
+            "$SLACK_WEBHOOK_URL"
+          '''
+        }
+      }
     }
 
     unstable {
-      sh '''
-        curl -sS -X POST -H "Content-type: application/json" \
-        --data "{
-          \\"text\\":\\"⚠️ ${APP_NAME} ${SLACK_AUDIENCE} deployment unstable | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
-        }" \
-        "$SLACK_WEBHOOK"
-      '''
+      script {
+        withCredentials([string(credentialsId: "${env.SLACK_WEBHOOK_CREDENTIAL}", variable: 'SLACK_WEBHOOK_URL')]) {
+          sh '''
+            curl -sS -X POST -H "Content-type: application/json" \
+            --data "{
+              \\"text\\":\\"⚠️ ${APP_NAME} ${ENV_LABEL} deployment unstable | Branch: ${BRANCH_NAME} | Job: ${JOB_NAME} | Build: #${BUILD_NUMBER} | ${BUILD_URL}\\"
+            }" \
+            "$SLACK_WEBHOOK_URL"
+          '''
+        }
+      }
     }
 
     always {
