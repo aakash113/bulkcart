@@ -37,14 +37,14 @@ pipeline {
             env.DEPLOY_HOST       = '18.222.163.244'
             env.DEPLOY_USER       = 'ec2-user'
             env.DEPLOY_APP_DIR    = '/home/ec2-user/bulkcart/qa'
-            env.SSH_CREDENTIAL_ID = 'main-ec2-key'
+            env.SSH_CREDENTIAL_ID = 'bulkcart-key-pem'
           } else if (params.DEPLOY_ENV == 'PROD') {
             env.ENV_NAME          = 'PROD'
             env.IMAGE_TAG         = 'prod'
             env.DEPLOY_HOST       = '18.222.126.228'
             env.DEPLOY_USER       = 'ec2-user'
             env.DEPLOY_APP_DIR    = '/home/ec2-user/bulkcart/prod'
-            env.SSH_CREDENTIAL_ID = 'main-ec2-key'
+            env.SSH_CREDENTIAL_ID = 'bulkcart-key-pem'
           } else {
             error("Unsupported DEPLOY_ENV: ${params.DEPLOY_ENV}")
           }
@@ -131,10 +131,11 @@ pipeline {
 
     stage('Deploy') {
       steps {
-        withCredentials([sshUserPrivateKey(credentialsId: "${env.SSH_CREDENTIAL_ID}", keyFileVariable: 'SSH_KEY_FILE')]) {
+        withCredentials([file(credentialsId: "${env.SSH_CREDENTIAL_ID}", variable: 'SSH_KEY_FILE')]) {
           sh '''
             set -e
             echo "Deploying to ${ENV_NAME} EC2: $DEPLOY_HOST"
+            chmod 600 "$SSH_KEY_FILE"
 
             ssh -i "$SSH_KEY_FILE" -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << EOF
               set -e
