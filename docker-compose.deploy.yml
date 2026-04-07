@@ -1,0 +1,35 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: bulkcart-mongo-${ENV_NAME}
+    restart: always
+    environment:
+      MONGO_INITDB_DATABASE: bulkcart_dev
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    image: aakash113/bulkcart-backend:${IMAGE_TAG}
+    container_name: bulkcart-backend-${ENV_NAME}
+    restart: always
+    depends_on:
+      - mongo
+    environment:
+      MONGO_URI: mongodb://mongo:27017/bulkcart_dev
+      PORT: 3000
+    ports:
+      - "3000:3000"
+
+  frontend:
+    image: aakash113/bulkcart-frontend:${IMAGE_TAG}
+    container_name: bulkcart-frontend-${ENV_NAME}
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "4200:80"
+
+volumes:
+  mongo_data:

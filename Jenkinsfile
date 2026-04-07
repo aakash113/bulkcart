@@ -138,7 +138,13 @@ pipeline {
             chmod 600 "$SSH_KEY_FILE"
 
             ssh -i "$SSH_KEY_FILE" -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} \
-              "DEPLOY_APP_DIR=${DEPLOY_APP_DIR} IMAGE_TAG=${IMAGE_TAG} bash -s" <<'EOF'
+              "mkdir -p ${DEPLOY_APP_DIR}"
+
+            scp -i "$SSH_KEY_FILE" -o StrictHostKeyChecking=no docker-compose.deploy.yml \
+              ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_APP_DIR}/docker-compose.yml
+
+            ssh -i "$SSH_KEY_FILE" -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} \
+              "DEPLOY_APP_DIR=${DEPLOY_APP_DIR} IMAGE_TAG=${IMAGE_TAG} ENV_NAME=$(echo ${ENV_NAME} | tr '[:upper:]' '[:lower:]') bash -s" <<'EOF'
               set -e
               mkdir -p "$DEPLOY_APP_DIR"
               cd "$DEPLOY_APP_DIR"
@@ -147,7 +153,7 @@ pipeline {
               docker pull "aakash113/bulkcart-frontend:${IMAGE_TAG}"
 
               docker compose down || true
-              IMAGE_TAG="$IMAGE_TAG" docker compose up -d
+              IMAGE_TAG="$IMAGE_TAG" ENV_NAME="$ENV_NAME" docker compose up -d
 
               for i in $(seq 1 12); do
                 if curl -fsS http://localhost:3000/api/health >/dev/null; then
