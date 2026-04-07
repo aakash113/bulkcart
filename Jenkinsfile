@@ -132,7 +132,7 @@ pipeline {
     stage('Deploy') {
       steps {
         withCredentials([file(credentialsId: "${env.SSH_CREDENTIAL_ID}", variable: 'SSH_KEY_FILE')]) {
-          sh '''
+          sh(script: '''
             set -e
             echo "Deploying to ${ENV_NAME} EC2: $DEPLOY_HOST"
             chmod 600 "$SSH_KEY_FILE"
@@ -145,50 +145,50 @@ pipeline {
 
             ssh -i "$SSH_KEY_FILE" -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} \
               "DEPLOY_APP_DIR=${DEPLOY_APP_DIR} IMAGE_TAG=${IMAGE_TAG} ENV_NAME=$(echo ${ENV_NAME} | tr '[:upper:]' '[:lower:]') bash -s" <<'EOF'
-              set -e
-              mkdir -p "$DEPLOY_APP_DIR"
-              cd "$DEPLOY_APP_DIR"
+            set -e
+            mkdir -p "$DEPLOY_APP_DIR"
+            cd "$DEPLOY_APP_DIR"
 
-              docker pull "aakash113/bulkcart-backend:${IMAGE_TAG}"
-              docker pull "aakash113/bulkcart-frontend:${IMAGE_TAG}"
+            docker pull "aakash113/bulkcart-backend:${IMAGE_TAG}"
+            docker pull "aakash113/bulkcart-frontend:${IMAGE_TAG}"
 
-              docker compose down || true
-              docker rm -f bulkcart-frontend-qa bulkcart-backend-qa bulkcart-mongo-qa 2>/dev/null || true
-              docker network rm ec2-user_default qa_default 2>/dev/null || true
-              IMAGE_TAG="$IMAGE_TAG" ENV_NAME="$ENV_NAME" docker compose up -d
+            docker compose down || true
+            docker rm -f bulkcart-frontend-qa bulkcart-backend-qa bulkcart-mongo-qa 2>/dev/null || true
+            docker network rm ec2-user_default qa_default 2>/dev/null || true
+            IMAGE_TAG="$IMAGE_TAG" ENV_NAME="$ENV_NAME" docker compose up -d
 
-              for i in $(seq 1 12); do
-                if curl -fsS http://localhost:3000/api/health >/dev/null; then
-                  echo "Backend health check passed"
-                  break
-                fi
-                if [ "$i" -eq 12 ]; then
-                  echo "Backend health check failed"
-                  docker ps
-                  docker compose logs --tail=50 backend
-                  exit 1
-                fi
-                sleep 5
-              done
+            for i in $(seq 1 12); do
+              if curl -fsS http://localhost:3000/api/health >/dev/null; then
+                echo "Backend health check passed"
+                break
+              fi
+              if [ "$i" -eq 12 ]; then
+                echo "Backend health check failed"
+                docker ps
+                docker compose logs --tail=50 backend
+                exit 1
+              fi
+              sleep 5
+            done
 
-              for i in $(seq 1 18); do
-                if curl -fsS http://localhost:4200 >/dev/null; then
-                  echo "Frontend health check passed"
-                  break
-                fi
-                if [ "$i" -eq 18 ]; then
-                  echo "Frontend health check failed"
-                  docker ps
-                  docker compose logs --tail=50 frontend
-                  exit 1
-                fi
-                sleep 5
-              done
+            for i in $(seq 1 18); do
+              if curl -fsS http://localhost:4200 >/dev/null; then
+                echo "Frontend health check passed"
+                break
+              fi
+              if [ "$i" -eq 18 ]; then
+                echo "Frontend health check failed"
+                docker ps
+                docker compose logs --tail=50 frontend
+                exit 1
+              fi
+              sleep 5
+            done
 
-              docker ps
-              echo "Deployment complete."
-            EOF
-          '''
+            docker ps
+            echo "Deployment complete."
+EOF
+          '''.stripIndent())
         }
       }
     }
