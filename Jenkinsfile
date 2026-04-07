@@ -78,6 +78,7 @@ pipeline {
         sh 'which node'
         sh 'npm -v || true'
         sh 'docker -v'
+        sh 'echo "Jenkins public IP:" && (curl -s https://checkip.amazonaws.com || curl -s ifconfig.me || true) && echo'
         sh 'pwd'
         sh 'mkdir -p "$NPM_CONFIG_CACHE"'
         sh 'ls -la'
