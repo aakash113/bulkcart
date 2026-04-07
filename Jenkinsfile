@@ -148,10 +148,33 @@ pipeline {
               docker compose down || true
               IMAGE_TAG=${IMAGE_TAG} docker compose up -d
 
-              sleep 15
+              for i in $(seq 1 12); do
+                if curl -fsS http://localhost:3000/api/health >/dev/null; then
+                  echo "Backend health check passed"
+                  break
+                fi
+                if [ "$i" -eq 12 ]; then
+                  echo "Backend health check failed"
+                  docker ps
+                  docker compose logs --tail=50 backend
+                  exit 1
+                fi
+                sleep 5
+              done
 
-              curl -fsS http://localhost:3000/api/health
-              curl -fsS http://localhost:4200 >/dev/null
+              for i in $(seq 1 18); do
+                if curl -fsS http://localhost:4200 >/dev/null; then
+                  echo "Frontend health check passed"
+                  break
+                fi
+                if [ "$i" -eq 18 ]; then
+                  echo "Frontend health check failed"
+                  docker ps
+                  docker compose logs --tail=50 frontend
+                  exit 1
+                fi
+                sleep 5
+              done
 
               docker ps
               echo "Deployment complete."
