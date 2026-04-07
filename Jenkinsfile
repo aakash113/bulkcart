@@ -138,7 +138,7 @@ pipeline {
             chmod 600 "$SSH_KEY_FILE"
 
             ssh -i "$SSH_KEY_FILE" -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} \
-              DEPLOY_APP_DIR='${DEPLOY_APP_DIR}' IMAGE_TAG='${IMAGE_TAG}' 'bash -s' <<'EOF'
+              "DEPLOY_APP_DIR=${DEPLOY_APP_DIR} IMAGE_TAG=${IMAGE_TAG} bash -s" <<'EOF'
               set -e
               mkdir -p "$DEPLOY_APP_DIR"
               cd "$DEPLOY_APP_DIR"
