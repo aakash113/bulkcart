@@ -137,16 +137,17 @@ pipeline {
             echo "Deploying to ${ENV_NAME} EC2: $DEPLOY_HOST"
             chmod 600 "$SSH_KEY_FILE"
 
-            ssh -i "$SSH_KEY_FILE" -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << EOF
+            ssh -i "$SSH_KEY_FILE" -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} \
+              DEPLOY_APP_DIR='${DEPLOY_APP_DIR}' IMAGE_TAG='${IMAGE_TAG}' 'bash -s' <<'EOF'
               set -e
-              mkdir -p ${DEPLOY_APP_DIR}
-              cd ${DEPLOY_APP_DIR}
+              mkdir -p "$DEPLOY_APP_DIR"
+              cd "$DEPLOY_APP_DIR"
 
-              docker pull aakash113/bulkcart-backend:${IMAGE_TAG}
-              docker pull aakash113/bulkcart-frontend:${IMAGE_TAG}
+              docker pull "aakash113/bulkcart-backend:${IMAGE_TAG}"
+              docker pull "aakash113/bulkcart-frontend:${IMAGE_TAG}"
 
               docker compose down || true
-              IMAGE_TAG=${IMAGE_TAG} docker compose up -d
+              IMAGE_TAG="$IMAGE_TAG" docker compose up -d
 
               for i in $(seq 1 12); do
                 if curl -fsS http://localhost:3000/api/health >/dev/null; then
