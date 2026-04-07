@@ -153,6 +153,8 @@ pipeline {
               docker pull "aakash113/bulkcart-frontend:${IMAGE_TAG}"
 
               docker compose down || true
+              docker rm -f bulkcart-frontend-qa bulkcart-backend-qa bulkcart-mongo-qa 2>/dev/null || true
+              docker network rm ec2-user_default qa_default 2>/dev/null || true
               IMAGE_TAG="$IMAGE_TAG" ENV_NAME="$ENV_NAME" docker compose up -d
 
               for i in $(seq 1 12); do
