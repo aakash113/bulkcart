@@ -198,52 +198,54 @@ EOF
         expression { return params.DEPLOY_ENV == 'QA' && params.RUN_QA_SMOKE }
       }
 
-      environment {
-        TESTRIGOR_TOKEN = credentials('testrigor-token')
-        TESTRIGOR_APPID = credentials('testrigor-appid-qa')
-      }
-
       steps {
-        sh '''
-          set -e
+        script {
+          withCredentials([
+            string(credentialsId: 'testrigor-token', variable: 'TESTRIGOR_TOKEN'),
+            string(credentialsId: 'testrigor-appid-qa', variable: 'TESTRIGOR_APPID')
+          ]) {
+            sh '''
+              set -e
 
-          echo "Triggering testRigor run..."
-          curl -sS -X POST \
-            -H "Content-type: application/json" \
-            -H "auth-token: ${TESTRIGOR_TOKEN}" \
-            "https://api.testrigor.com/api/v1/apps/${TESTRIGOR_APPID}/retest" >/dev/null
+              echo "Triggering testRigor run..."
+              curl -sS -X POST \
+                -H "Content-type: application/json" \
+                -H "auth-token: ${TESTRIGOR_TOKEN}" \
+                "https://api.testrigor.com/api/v1/apps/${TESTRIGOR_APPID}/retest" >/dev/null
 
-          echo "Polling testRigor status..."
-          sleep 10
+              echo "Polling testRigor status..."
+              sleep 10
 
-          for i in $(seq 1 60); do
-            resp=$(curl -sS -i -X GET \
-              -H "auth-token: ${TESTRIGOR_TOKEN}" \
-              -H "Accept: application/json" \
-              "https://api.testrigor.com/api/v1/apps/${TESTRIGOR_APPID}/status")
+              for i in $(seq 1 60); do
+                resp=$(curl -sS -i -X GET \
+                  -H "auth-token: ${TESTRIGOR_TOKEN}" \
+                  -H "Accept: application/json" \
+                  "https://api.testrigor.com/api/v1/apps/${TESTRIGOR_APPID}/status")
 
-            code=$(echo "$resp" | awk 'NR==1{print $2}')
-            echo "testRigor status HTTP: $code"
+                code=$(echo "$resp" | awk 'NR==1{print $2}')
+                echo "testRigor status HTTP: $code"
 
-            if [ "$code" = "200" ]; then
-              echo "QA smoke PASS"
-              exit 0
-            elif [ "$code" = "230" ]; then
-              echo "QA smoke FAIL"
+                if [ "$code" = "200" ]; then
+                  echo "QA smoke PASS"
+                  exit 0
+                elif [ "$code" = "230" ]; then
+                  echo "QA smoke FAIL"
+                  exit 1
+                elif [ "$code" = "227" ] || [ "$code" = "228" ]; then
+                  echo "still running..."
+                else
+                  echo "unexpected status: $code"
+                  exit 1
+                fi
+
+                sleep 10
+              done
+
+              echo "QA smoke timeout"
               exit 1
-            elif [ "$code" = "227" ] || [ "$code" = "228" ]; then
-              echo "still running..."
-            else
-              echo "unexpected status: $code"
-              exit 1
-            fi
-
-            sleep 10
-          done
-
-          echo "QA smoke timeout"
-          exit 1
-        '''
+            '''
+          }
+        }
       }
     }
   }
