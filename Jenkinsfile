@@ -16,6 +16,11 @@ pipeline {
       defaultValue: true,
       description: 'Run testRigor smoke test after QA deployment'
     )
+    string(
+      name: 'TESTRIGOR_TEST_CASE_UUIDS',
+      defaultValue: '5044b1e9-9509-40f7-a1a3-1158a8cbb8f9',
+      description: 'Comma-separated testRigor test case UUIDs to run for QA smoke. Leave blank to run the full suite.'
+    )
   }
 
   environment {
@@ -200,50 +205,61 @@ EOF
 
       steps {
         script {
+          def selectedTestCaseUuids = params.TESTRIGOR_TEST_CASE_UUIDS
+            .split(',')
+            .collect { it.trim() }
+            .findAll { it }
+          def retestPayload = selectedTestCaseUuids
+            ? groovy.json.JsonOutput.toJson([testCaseUuids: selectedTestCaseUuids])
+            : '{}'
+
           withCredentials([
             string(credentialsId: 'testrigor-token', variable: 'TESTRIGOR_TOKEN'),
             string(credentialsId: 'testrigor-appid-qa', variable: 'TESTRIGOR_APPID')
           ]) {
-            sh '''
+            sh """
               set -e
 
               echo "Triggering testRigor run..."
               curl -sS -X POST \
                 -H "Content-type: application/json" \
-                -H "auth-token: ${TESTRIGOR_TOKEN}" \
-                "https://api.testrigor.com/api/v1/apps/${TESTRIGOR_APPID}/retest" >/dev/null
+                -H "auth-token: \${TESTRIGOR_TOKEN}" \
+                --data '${retestPayload}' \
+                "https://api.testrigor.com/api/v1/apps/\${TESTRIGOR_APPID}/retest" >/dev/null
 
               echo "Polling testRigor status..."
               sleep 10
 
-              for i in $(seq 1 60); do
-                resp=$(curl -sS -i -X GET \
-                  -H "auth-token: ${TESTRIGOR_TOKEN}" \
+              for i in \$(seq 1 120); do
+                resp=\$(curl -sS -i -X GET \
+                  -H "auth-token: \${TESTRIGOR_TOKEN}" \
                   -H "Accept: application/json" \
-                  "https://api.testrigor.com/api/v1/apps/${TESTRIGOR_APPID}/status")
+                  "https://api.testrigor.com/api/v1/apps/\${TESTRIGOR_APPID}/status")
 
-                code=$(echo "$resp" | awk 'NR==1{print $2}')
-                echo "testRigor status HTTP: $code"
+                code=\$(echo "\$resp" | awk 'NR==1{print \$2}')
+                echo "testRigor status HTTP: \$code"
+                echo "\$resp" | grep -m1 '"detailsUrl"' || true
+                echo "\$resp" | grep -m1 '"overallResults"' || true
 
-                if [ "$code" = "200" ]; then
+                if [ "\$code" = "200" ]; then
                   echo "QA smoke PASS"
                   exit 0
-                elif [ "$code" = "230" ]; then
+                elif [ "\$code" = "230" ]; then
                   echo "QA smoke FAIL"
                   exit 1
-                elif [ "$code" = "227" ] || [ "$code" = "228" ]; then
+                elif [ "\$code" = "227" ] || [ "\$code" = "228" ]; then
                   echo "still running..."
                 else
-                  echo "unexpected status: $code"
+                  echo "unexpected status: \$code"
                   exit 1
                 fi
 
                 sleep 10
               done
 
-              echo "QA smoke timeout"
+              echo "QA smoke timeout after 20 minutes"
               exit 1
-            '''
+            """
           }
         }
       }
