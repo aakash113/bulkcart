@@ -249,6 +249,8 @@ EOF
                   exit 1
                 elif [ "\$code" = "227" ] || [ "\$code" = "228" ]; then
                   echo "still running..."
+                elif [ "\$code" = "500" ] || [ "\$code" = "502" ] || [ "\$code" = "503" ] || [ "\$code" = "504" ]; then
+                  echo "testRigor API temporary error, retrying..."
                 else
                   echo "unexpected status: \$code"
                   exit 1
