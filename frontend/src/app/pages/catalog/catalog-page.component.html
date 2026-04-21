@@ -24,6 +24,118 @@
     <p class="notice-banner">{{ notice() }}</p>
   }
 
+  @if (auth.user()?.role === 'vendor' || auth.user()?.role === 'admin') {
+    <section class="admin-panel">
+      <article class="panel-card">
+        <h2>Supplier product management</h2>
+        <div class="form-grid">
+          <label>
+            Product name
+            <input [ngModel]="productForm().name" (ngModelChange)="setProductField('name', $event)" />
+          </label>
+          <label>
+            SKU
+            <input [ngModel]="productForm().sku" (ngModelChange)="setProductField('sku', $event)" />
+          </label>
+          <label>
+            Category
+            <select [ngModel]="productForm().category" (ngModelChange)="setProductField('category', $event)">
+              @for (category of availableFilters()?.categories ?? []; track category) {
+                <option [value]="category">{{ category }}</option>
+              }
+            </select>
+          </label>
+          <label>
+            Unit
+            <input [ngModel]="productForm().unit" (ngModelChange)="setProductField('unit', $event)" />
+          </label>
+          <label>
+            Base price
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              [ngModel]="productForm().price"
+              (ngModelChange)="setProductField('price', $event)"
+            />
+          </label>
+          <label>
+            Inventory <input type="number" min="0" [ngModel]="productForm().inventory" (ngModelChange)="setProductField('inventory', $event)" />
+          </label>
+          <label>
+            MOQ
+            <input
+              type="number"
+              min="1"
+              [ngModel]="productForm().minOrderQuantity"
+              (ngModelChange)="setProductField('minOrderQuantity', $event)"
+            />
+          </label>
+          <label>
+            Origin <input [ngModel]="productForm().origin" (ngModelChange)="setProductField('origin', $event)" />
+          </label>
+          <label class="span-2">
+            Image URL
+            <input [ngModel]="productForm().image" (ngModelChange)="setProductField('image', $event)" />
+          </label>
+          <label class="span-2">
+            Description
+            <textarea [ngModel]="productForm().description" (ngModelChange)="setProductField('description', $event)"></textarea>
+          </label>
+        </div>
+        <div class="button-row">
+          <button type="button" class="add-btn" (click)="saveProduct()">Save product</button>
+        </div>
+      </article>
+
+      <article class="panel-card">
+        <h2>Pricing and discounts</h2>
+        <div class="form-grid">
+          <label>
+            Product
+            <select [ngModel]="pricingForm().productId" (ngModelChange)="setPricingField('productId', $event)">
+              <option value="">Select product</option>
+              @for (product of products(); track product.id) {
+                <option [value]="product.id">{{ product.name }} ({{ product.sku }})</option>
+              }
+            </select>
+          </label>
+          <label>
+            Base price
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              [ngModel]="pricingForm().basePrice"
+              (ngModelChange)="setPricingField('basePrice', $event)"
+            />
+          </label>
+          <label class="span-2">
+            Volume tiers (one per line: minQty:price)
+            <textarea [ngModel]="pricingForm().tiersText" (ngModelChange)="setPricingField('tiersText', $event)"></textarea>
+          </label>
+          <label>
+            Customer ID
+            <input [ngModel]="pricingForm().customerId" (ngModelChange)="setPricingField('customerId', $event)" />
+          </label>
+          <label>
+            Customer specific price
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              [ngModel]="pricingForm().customerPrice"
+              (ngModelChange)="setPricingField('customerPrice', $event)"
+            />
+          </label>
+        </div>
+        <div class="button-row">
+          <button type="button" class="add-btn" (click)="applyPricingConfig()">Apply pricing rules</button>
+        </div>
+      </article>
+    </section>
+  }
+
   <section class="catalog-layout">
     <aside class="filters-card">
       <label>
@@ -121,6 +233,12 @@
             <button type="button" class="add-btn" (click)="addToCart(product.id, product.minOrderQuantity)">
               Add MOQ to cart
             </button>
+            @if (auth.user()?.role === 'vendor' || auth.user()?.role === 'admin') {
+              <div class="button-row">
+                <button type="button" class="ghost-btn" (click)="editProduct(product)">Edit</button>
+                <button type="button" class="ghost-btn danger" (click)="removeProduct(product.id)">Delete</button>
+              </div>
+            }
           </div>
         </article>
       }

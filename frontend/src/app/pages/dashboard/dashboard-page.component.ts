@@ -22,6 +22,7 @@ export class DashboardPageComponent {
   protected readonly role = signal<UserRole>((this.route.snapshot.data['role'] as UserRole) ?? 'customer');
   protected readonly notice = signal('');
   protected readonly actionVendorId = signal('');
+  protected readonly actionType = signal<'approve' | 'decline' | ''>('');
 
   constructor() {
     effect(() => {
@@ -48,16 +49,45 @@ export class DashboardPageComponent {
 
     this.notice.set('');
     this.actionVendorId.set(vendorId);
+    this.actionType.set('approve');
 
     this.api.approveVendor(user.id, vendorId).subscribe({
       next: (response) => {
         this.notice.set(response.message);
         this.actionVendorId.set('');
+        this.actionType.set('');
         this.loadDashboard('admin', user.id);
       },
       error: (error: HttpErrorResponse) => {
         this.notice.set(error.error?.message ?? 'Could not approve vendor');
         this.actionVendorId.set('');
+        this.actionType.set('');
+      },
+    });
+  }
+
+  protected declineVendor(vendorId: string) {
+    const user = this.auth.user();
+
+    if (!user || user.role !== 'admin') {
+      return;
+    }
+
+    this.notice.set('');
+    this.actionVendorId.set(vendorId);
+    this.actionType.set('decline');
+
+    this.api.declineVendor(user.id, vendorId).subscribe({
+      next: (response) => {
+        this.notice.set(response.message);
+        this.actionVendorId.set('');
+        this.actionType.set('');
+        this.loadDashboard('admin', user.id);
+      },
+      error: (error: HttpErrorResponse) => {
+        this.notice.set(error.error?.message ?? 'Could not decline vendor');
+        this.actionVendorId.set('');
+        this.actionType.set('');
       },
     });
   }

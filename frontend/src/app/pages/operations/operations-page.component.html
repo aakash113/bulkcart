@@ -1,0 +1,141 @@
+<div class="page-shell">
+  <app-site-header mode="private"></app-site-header>
+
+  <section class="hero-card">
+    <span class="eyebrow">Operations</span>
+    <h1>Shipments, spending analytics, reorder intelligence, and billing controls.</h1>
+    @if (notice()) {
+      <p class="notice-banner">{{ notice() }}</p>
+    }
+  </section>
+
+  <section class="panel-card">
+    <h2>Create shipment</h2>
+    <div class="form-grid">
+      <label>Order ID <input [ngModel]="shipmentForm().orderId" (ngModelChange)="setShipmentField('orderId', $event)" /></label>
+      <label>Warehouse <input [ngModel]="shipmentForm().warehouse" (ngModelChange)="setShipmentField('warehouse', $event)" /></label>
+      <label>Carrier <input [ngModel]="shipmentForm().carrier" (ngModelChange)="setShipmentField('carrier', $event)" /></label>
+      <label>Tracking # <input [ngModel]="shipmentForm().trackingNumber" (ngModelChange)="setShipmentField('trackingNumber', $event)" /></label>
+      <label>Line count <input type="number" min="1" [ngModel]="shipmentForm().lineCount" (ngModelChange)="setShipmentField('lineCount', $event)" /></label>
+    </div>
+    <button type="button" class="action-btn" (click)="createShipment()">Create shipment</button>
+
+    @if (shipments().length) {
+      <div class="list-stack">
+        @for (shipment of shipments(); track shipment.id) {
+          <div class="list-row">
+            <strong>{{ shipment.id }} · {{ shipment.orderId }}</strong>
+            <span>{{ shipment.carrier }} · {{ shipment.trackingNumber }} · {{ shipment.warehouse }} · {{ shipment.createdAt | date: 'mediumDate' }}</span>
+          </div>
+        }
+      </div>
+    }
+  </section>
+
+  <section class="panel-card">
+    <h2>Spending reports</h2>
+    <div class="form-grid">
+      <label>Supplier <input [ngModel]="reportFilters().supplier" (ngModelChange)="setReportFilter('supplier', $event)" /></label>
+      <label>Category <input [ngModel]="reportFilters().category" (ngModelChange)="setReportFilter('category', $event)" /></label>
+      <label>From <input type="date" [ngModel]="reportFilters().fromDate" (ngModelChange)="setReportFilter('fromDate', $event)" /></label>
+      <label>To <input type="date" [ngModel]="reportFilters().toDate" (ngModelChange)="setReportFilter('toDate', $event)" /></label>
+    </div>
+    <button type="button" class="action-btn" (click)="loadReport()">Run report</button>
+
+    @if (report(); as spending) {
+      <p class="total-line">Total spend: <strong>{{ spending.totalSpend | currency }}</strong></p>
+      <div class="chart-grid">
+        <article>
+          <h3>By supplier</h3>
+          @for (entry of spending.totals.supplier; track entry.label) {
+            <div class="chart-row">
+              <span>{{ entry.label }}</span>
+              <div class="bar"><div [style.width]="barWidth(entry.value, spending.totalSpend)"></div></div>
+              <strong>{{ entry.value | currency }}</strong>
+            </div>
+          }
+        </article>
+        <article>
+          <h3>By category</h3>
+          @for (entry of spending.totals.category; track entry.label) {
+            <div class="chart-row">
+              <span>{{ entry.label }}</span>
+              <div class="bar"><div [style.width]="barWidth(entry.value, spending.totalSpend)"></div></div>
+              <strong>{{ entry.value | currency }}</strong>
+            </div>
+          }
+        </article>
+      </div>
+    }
+  </section>
+
+  <section class="panel-card">
+    <h2>Smart reorder suggestions</h2>
+    <div class="list-stack">
+      @for (suggestion of suggestions(); track suggestion.productId) {
+        <div class="list-row">
+          <strong>{{ suggestion.productName }} · {{ suggestion.suggestedQuantity }} units</strong>
+          <span>{{ suggestion.supplierName }} · Confidence {{ suggestion.confidence | percent: '1.0-0' }}</span>
+        </div>
+      }
+    </div>
+  </section>
+
+  @if (auth.user()?.role === 'admin') {
+    <section class="panel-card">
+      <h2>Subscription and commissions</h2>
+      <div class="list-stack">
+        @for (tier of tiers(); track $index) {
+          <div class="tier-row">
+            <input [ngModel]="tier.name" (ngModelChange)="setTierField($index, 'name', $event)" />
+            <input
+              type="number"
+              min="0"
+              [ngModel]="tier.minVolume"
+              (ngModelChange)="setTierField($index, 'minVolume', $event)"
+            />
+            <input
+              type="number"
+              min="1"
+              [ngModel]="tier.maxVolume"
+              (ngModelChange)="setTierField($index, 'maxVolume', $event)"
+            />
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              [ngModel]="tier.subscriptionFee"
+              (ngModelChange)="setTierField($index, 'subscriptionFee', $event)"
+            />
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              [ngModel]="tier.commissionRate"
+              (ngModelChange)="setTierField($index, 'commissionRate', $event)"
+            />
+          </div>
+        }
+      </div>
+      <div class="button-row">
+        <button type="button" class="ghost-btn" (click)="addTier()">Add tier</button>
+        <button type="button" class="action-btn" (click)="saveTiers()">Save tiers</button>
+      </div>
+
+      <div class="button-row">
+        <label>
+          Transaction volume
+          <input type="number" min="1" [ngModel]="previewVolume()" (ngModelChange)="previewVolume.set(+$event)" />
+        </label>
+        <button type="button" class="action-btn" (click)="loadPreview()">Calculate</button>
+      </div>
+
+      @if (preview(); as result) {
+        <p class="total-line">
+          Tier <strong>{{ result.appliedTier }}</strong> · Subscription {{ result.subscriptionFee | currency }} · Commission
+          {{ result.commissionAmount | currency }} · Total billable <strong>{{ result.totalBillable | currency }}</strong>
+        </p>
+      }
+    </section>
+  }
+</div>

@@ -10,6 +10,27 @@
       }
     </section>
 
+    @if (role() === 'customer') {
+      <section class="panel-card role-banner customer-banner">
+        <h2>Customer workspace</h2>
+        <p>Track spend, monitor active orders, and quickly repeat previous purchases.</p>
+      </section>
+    }
+
+    @if (role() === 'vendor') {
+      <section class="panel-card role-banner vendor-banner">
+        <h2>Vendor workspace</h2>
+        <p>Manage SKU health, monitor fulfillment load, and optimize monthly revenue flow.</p>
+      </section>
+    }
+
+    @if (role() === 'admin') {
+      <section class="panel-card role-banner admin-banner">
+        <h2>Admin workspace</h2>
+        <p>Oversee vendor approvals, disputes, and overall marketplace operations.</p>
+      </section>
+    }
+
     <section class="stats-grid">
       @for (stat of dashboard.stats; track stat.label) {
         <article>
@@ -18,6 +39,24 @@
         </article>
       }
     </section>
+
+    @if (role() === 'customer' && dashboard.quickActions?.length) {
+      <section class="panel-card emphasis">
+        <h2>Customer quick actions</h2>
+        <div class="action-chip-grid">
+          @for (action of dashboard.quickActions; track action) {
+            <span class="action-chip">{{ action }}</span>
+          }
+        </div>
+      </section>
+    }
+
+    @if (role() === 'vendor' && dashboard.productHealth?.length) {
+      <section class="panel-card emphasis">
+        <h2>Vendor catalog focus</h2>
+        <p>Keep inventory above MOQ and monitor lead time risk for top-selling SKUs.</p>
+      </section>
+    }
 
     <section class="detail-grid">
       @if (dashboard.charts; as charts) {
@@ -73,14 +112,24 @@
                   <span>{{ approval.contact }} · {{ approval.location }} · {{ approval.approved ? 'Approved' : 'Pending' }}</span>
                 </div>
                 @if (!approval.approved) {
-                  <button
-                    type="button"
-                    class="action-btn"
-                    (click)="approveVendor(approval.id)"
-                    [disabled]="actionVendorId() === approval.id"
-                  >
-                    {{ actionVendorId() === approval.id ? 'Approving...' : 'Approve vendor' }}
-                  </button>
+                  <div class="action-pair">
+                    <button
+                      type="button"
+                      class="action-btn"
+                      (click)="approveVendor(approval.id)"
+                      [disabled]="actionVendorId() === approval.id"
+                    >
+                      {{ actionVendorId() === approval.id && actionType() === 'approve' ? 'Approving...' : 'Approve' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="decline-btn"
+                      (click)="declineVendor(approval.id)"
+                      [disabled]="actionVendorId() === approval.id"
+                    >
+                      {{ actionVendorId() === approval.id && actionType() === 'decline' ? 'Declining...' : 'Decline' }}
+                    </button>
+                  </div>
                 }
               </div>
             }

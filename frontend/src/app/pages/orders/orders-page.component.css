@@ -7,14 +7,16 @@
 
 .hero-card,
 .summary-grid article,
-.order-card {
+.order-card,
+.panel-card {
   border-radius: 30px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 22px 60px rgba(11, 31, 63, 0.1);
 }
 
 .hero-card,
-.order-card {
+.order-card,
+.panel-card {
   padding: 30px;
 }
 
@@ -38,6 +40,10 @@
   gap: 16px;
 }
 
+.summary-grid.compact article {
+  padding: 18px;
+}
+
 .summary-grid article {
   padding: 24px;
 }
@@ -50,6 +56,126 @@
 .order-stack {
   display: grid;
   gap: 18px;
+}
+
+.panel-card {
+  display: grid;
+  gap: 16px;
+}
+
+.notice-banner {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #ecfeff;
+  color: #155e75;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.filter-grid label {
+  display: grid;
+  gap: 6px;
+  color: #334155;
+  font-size: 0.9rem;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid rgba(11, 31, 63, 0.2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.action-btn,
+.ghost-btn {
+  border: none;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.action-btn {
+  background: #0f766e;
+  color: #fff;
+}
+
+.ghost-btn {
+  background: rgba(15, 118, 110, 0.1);
+  color: #0f766e;
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.timeline {
+  display: grid;
+  gap: 10px;
+}
+
+.timeline article {
+  border: 1px solid rgba(11, 31, 63, 0.08);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+}
+
+.timeline p {
+  margin: 0;
+  color: #334155;
+}
+
+.draft-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.draft-line {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto;
+  gap: 10px;
+}
+
+.helper {
+  margin: 0;
+  color: #334155;
+}
+
+.bulk-lines {
+  display: grid;
+  gap: 8px;
+}
+
+.bulk-lines div {
+  border: 1px solid rgba(11, 31, 63, 0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.bulk-lines .invalid {
+  border-color: rgba(220, 38, 38, 0.25);
+  background: rgba(254, 242, 242, 0.8);
 }
 
 .order-topline,
@@ -88,7 +214,16 @@
 }
 
 @media (max-width: 900px) {
-  .summary-grid {
+  .summary-grid,
+  .filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .history-row {
+    grid-template-columns: 1fr;
+  }
+
+  .draft-line {
     grid-template-columns: 1fr;
   }
 }

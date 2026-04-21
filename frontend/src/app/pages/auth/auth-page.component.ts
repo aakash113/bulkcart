@@ -209,8 +209,17 @@ export class AuthPageComponent {
           });
 
     request.subscribe({
-      next: () => {
+      next: (response) => {
         this.loading.set(false);
+
+        if (this.mode() === 'signup' && response.user.role === 'vendor' && !response.user.approved) {
+          this.infoMessage.set(
+            response.message ?? 'Vendor profile submitted. Wait for admin approval before logging in.',
+          );
+          this.router.navigate(['/login'], { queryParams: { role: 'vendor' } });
+          return;
+        }
+
         const user = this.auth.user();
         if (user) {
           this.router.navigateByUrl(

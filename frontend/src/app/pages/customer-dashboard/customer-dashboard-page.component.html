@@ -1,0 +1,82 @@
+<div class="page-shell">
+  <app-site-header mode="private"></app-site-header>
+
+  @if (dashboard(); as data) {
+    <section class="headline-card">
+      <span class="eyebrow">Customer dashboard</span>
+      <h1>{{ data.headline }}</h1>
+      <p>Track your spend, monitor order status, and review order line details in one place.</p>
+      @if (notice()) {
+        <p class="notice-banner">{{ notice() }}</p>
+      }
+    </section>
+
+    <section class="stats-grid">
+      @for (stat of data.stats; track stat.label) {
+        <article>
+          <strong>{{ stat.value }}</strong>
+          <span>{{ stat.label }}</span>
+        </article>
+      }
+    </section>
+
+    @if (data.quickActions?.length) {
+      <section class="panel-card">
+        <h2>Quick actions</h2>
+        <div class="action-chip-grid">
+          @for (action of data.quickActions; track action) {
+            <span class="action-chip">{{ action }}</span>
+          }
+        </div>
+      </section>
+    }
+
+    <section class="detail-grid">
+      @if (data.charts; as charts) {
+        @for (entry of charts | keyvalue; track entry.key) {
+          <article class="panel-card">
+            <h2>{{ entry.key | titlecase }}</h2>
+            <div class="chart-stack">
+              @for (point of entry.value; track point.label) {
+                <div class="chart-row">
+                  <span>{{ point.label }}</span>
+                  <div class="bar-track"><div class="bar-fill" [style.width]="barWidth(point.value, entry.value)"></div></div>
+                  <strong>{{ point.value }}</strong>
+                </div>
+              }
+            </div>
+          </article>
+        }
+      }
+    </section>
+  }
+
+  @if (orders(); as orderData) {
+    <section class="panel-card">
+      <h2>Your order details</h2>
+      @if (!orderData.items.length) {
+        <p>No orders yet. Your placed orders will appear here.</p>
+      } @else {
+        <div class="order-stack">
+          @for (order of orderData.items; track order.id) {
+            <article class="order-card">
+              <div class="order-top">
+                <strong>{{ order.id }}</strong>
+                <span class="status-pill">{{ order.status }}</span>
+              </div>
+              <p class="meta-line">{{ order.createdAt | date: 'mediumDate' }} · {{ order.total | currency }} · {{ order.vendorName }}</p>
+              <div class="line-items">
+                @for (item of order.items; track item.productId) {
+                  <div class="line-row">
+                    <span>{{ item.name }}</span>
+                    <strong>{{ item.quantity }} × {{ item.unitPrice | currency }} = {{ item.subtotal | currency }}</strong>
+                  </div>
+                }
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  }
+</div>

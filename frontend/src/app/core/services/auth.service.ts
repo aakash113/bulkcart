@@ -35,7 +35,15 @@ export class AuthService {
     otpVerificationToken: string;
     businessDescription?: string;
   }) {
-    return this.api.signup(payload).pipe(tap((response) => this.persistSession(response)));
+    return this.api.signup(payload).pipe(
+      tap((response) => {
+        // Vendor accounts require admin approval before interactive access.
+        if (response.user.role === 'vendor' && !response.user.approved) {
+          return;
+        }
+        this.persistSession(response);
+      }),
+    );
   }
 
   logout() {

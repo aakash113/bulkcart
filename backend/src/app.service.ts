@@ -1,13 +1,15 @@
-import { Injectable, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as nodemailer from 'nodemailer';
 import { certifications, productCategories, type UserRole } from './data/mock-data';
 import { Cart } from './schemas/cart.schema';
 import { OtpCode } from './schemas/otp.schema';
+import { OrderDraft } from './schemas/order-draft.schema';
 import { Order } from './schemas/order.schema';
 import { Payment } from './schemas/payment.schema';
 import { Product } from './schemas/product.schema';
+import { Shipment } from './schemas/shipment.schema';
 import { User } from './schemas/user.schema';
 
 interface ProductQuery {
@@ -17,14 +19,47 @@ interface ProductQuery {
   sort?: 'featured' | 'price-asc' | 'price-desc' | 'rating' | 'lead-time';
 }
 
+interface OrderFilterQuery {
+  supplier?: string;
+  status?: string;
+  orderId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export interface SubscriptionTier {
+  name: string;
+  minVolume: number;
+  maxVolume: number;
+  subscriptionFee: number;
+  commissionRate: number;
+}
+
 @Injectable()
 export class AppService implements OnModuleInit {
+  private readonly orderHistoryStore = new Map<
+    string,
+    Array<{
+      status: 'Submitted' | 'Approved' | 'Shipped' | 'Delivered';
+      changedAt: string;
+      changedBy: string;
+      note?: string;
+    }>
+  >();
+  private subscriptionTiers: SubscriptionTier[] = [
+    { name: 'Starter', minVolume: 0, maxVolume: 10000, subscriptionFee: 199, commissionRate: 2.2 },
+    { name: 'Growth', minVolume: 10001, maxVolume: 50000, subscriptionFee: 499, commissionRate: 1.8 },
+    { name: 'Enterprise', minVolume: 50001, maxVolume: 10000000, subscriptionFee: 999, commissionRate: 1.4 },
+  ];
+
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<User>,
     @InjectModel(Product.name) private readonly productModel: Model<Product>,
     @InjectModel(Cart.name) private readonly cartModel: Model<Cart>,
     @InjectModel(Order.name) private readonly orderModel: Model<Order>,
+    @InjectModel(OrderDraft.name) private readonly orderDraftModel: Model<OrderDraft>,
     @InjectModel(Payment.name) private readonly paymentModel: Model<Payment>,
+    @InjectModel(Shipment.name) private readonly shipmentModel: Model<Shipment>,
     @InjectModel(OtpCode.name) private readonly otpCodeModel: Model<OtpCode>,
   ) {}
 
@@ -480,7 +515,7 @@ export class AppService implements OnModuleInit {
     };
   }
 
-  async getOrders(role: UserRole, userId: string) {
+  async getOrders(role: UserRole, userId: string, filters?: OrderFilterQuery) {
     await this.ensureUser(userId, role);
 
     let items;
@@ -490,6 +525,35 @@ export class AppService implements OnModuleInit {
       items = await this.orderModel.find({ vendorId: userId }).sort({ createdAt: -1 }).lean();
     } else {
       items = await this.orderModel.find().sort({ createdAt: -1 }).lean();
+    }
+
+    if (filters?.supplier) {
+      const supplier = filters.supplier.toLowerCase();
+      items = items.filter((order) => order.vendorName.toLowerCase().includes(supplier));
+    }
+
+    if (filters?.status) {
+      const status = filters.status.toLowerCase();
+      items = items.filter((order) => order.status.toLowerCase() === status);
+    }
+
+    if (filters?.orderId) {
+      const orderId = filters.orderId.toLowerCase();
+      items = items.filter((order) => order.id.toLowerCase().includes(orderId));
+    }
+
+    if (filters?.dateFrom) {
+      const from = new Date(filters.dateFrom).getTime();
+      if (!Number.isNaN(from)) {
+        items = items.filter((order) => new Date(order.createdAt).getTime() >= from);
+      }
+    }
+
+    if (filters?.dateTo) {
+      const to = new Date(filters.dateTo).getTime();
+      if (!Number.isNaN(to)) {
+        items = items.filter((order) => new Date(order.createdAt).getTime() <= to + 86399999);
+      }
     }
 
     return {
@@ -610,6 +674,589 @@ export class AppService implements OnModuleInit {
       message: `${vendor.company} is now approved and can sign in.`,
       user: this.toAuthPayload(vendor.toObject()).user,
     };
+  }
+
+  async declineVendor(adminId: string, vendorId: string) {
+    await this.ensureUser(adminId, 'admin');
+
+    const vendor = await this.userModel.findOne({ id: vendorId, role: 'vendor' });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor not found');
+    }
+
+    if (vendor.approved) {
+      throw new BadRequestException('Approved vendors cannot be declined from onboarding.');
+    }
+
+    await this.userModel.deleteOne({ _id: vendor._id });
+    await this.cartModel.deleteMany({ userId: vendor.id });
+
+    return {
+      message: `${vendor.company} has been declined and removed from pending vendors.`,
+      vendorId: vendor.id,
+    };
+  }
+
+  async getOrderHistory(orderId: string, role: UserRole, userId: string) {
+    const order = await this.orderModel.findOne({ id: orderId }).lean();
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    const isAllowed =
+      role === 'admin' ||
+      (role === 'customer' && order.customerId === userId) ||
+      (role === 'vendor' && order.vendorId === userId);
+
+    if (!isAllowed) {
+      throw new UnauthorizedException('You are not allowed to view this order history');
+    }
+
+    const history = this.getOrCreateOrderHistory(order);
+    return { order: this.cleanOrder(order), history };
+  }
+
+  async createOrderDraft(payload: {
+    userId: string;
+    supplier: string;
+    lines: Array<{ productId: string; quantity: number; unitPrice: number }>;
+  }) {
+    await this.ensureUser(payload.userId, 'customer');
+    this.validateDraftLines(payload.lines);
+
+    const id = `DRF-${Date.now()}`;
+    const lines = payload.lines.map((line) => ({
+      productId: line.productId,
+      quantity: line.quantity,
+      unitPrice: Number(line.unitPrice.toFixed(2)),
+      subtotal: Number((line.quantity * line.unitPrice).toFixed(2)),
+    }));
+
+    const draft = await this.orderDraftModel.create({
+      id,
+      userId: payload.userId,
+      supplier: payload.supplier,
+      status: 'draft',
+      updatedAt: new Date().toISOString(),
+      lines,
+      total: Number(lines.reduce((sum, line) => sum + line.subtotal, 0).toFixed(2)),
+    });
+
+    return this.cleanDocument(draft.toObject());
+  }
+
+  async updateOrderDraft(
+    draftId: string,
+    payload: {
+      userId: string;
+      supplier: string;
+      lines: Array<{ productId: string; quantity: number; unitPrice: number }>;
+    },
+  ) {
+    await this.ensureUser(payload.userId, 'customer');
+    this.validateDraftLines(payload.lines);
+
+    const draft = await this.orderDraftModel.findOne({ id: draftId, userId: payload.userId });
+    if (!draft) {
+      throw new NotFoundException('Draft not found');
+    }
+
+    draft.supplier = payload.supplier;
+    draft.lines = payload.lines.map((line) => ({
+      productId: line.productId,
+      quantity: line.quantity,
+      unitPrice: Number(line.unitPrice.toFixed(2)),
+      subtotal: Number((line.quantity * line.unitPrice).toFixed(2)),
+    }));
+    draft.total = Number(draft.lines.reduce((sum, line) => sum + line.subtotal, 0).toFixed(2));
+    draft.updatedAt = new Date().toISOString();
+    await draft.save();
+
+    return this.cleanDocument(draft.toObject());
+  }
+
+  async getOrderDraft(draftId: string, userId: string) {
+    await this.ensureUser(userId, 'customer');
+    const draft = await this.orderDraftModel.findOne({ id: draftId, userId }).lean();
+    if (!draft) {
+      throw new NotFoundException('Draft not found');
+    }
+    return this.cleanDocument(draft);
+  }
+
+  async submitOrderDraft(draftId: string, userId: string) {
+    const customer = await this.ensureUser(userId, 'customer');
+    const draft = await this.orderDraftModel.findOne({ id: draftId, userId });
+    if (!draft) {
+      throw new NotFoundException('Draft not found');
+    }
+    if (!draft.lines.length) {
+      throw new BadRequestException('Draft is empty');
+    }
+
+    const vendor = await this.userModel.findOne({ role: 'vendor', company: draft.supplier }).lean();
+    if (!vendor) {
+      throw new NotFoundException('Supplier not found');
+    }
+
+    const createdAt = new Date().toISOString();
+    const order = await this.orderModel.create({
+      id: `ORD-${10000 + Math.floor(Math.random() * 90000)}`,
+      customerId: customer.id,
+      vendorId: vendor.id,
+      customerName: customer.company,
+      vendorName: draft.supplier,
+      status: 'Pending',
+      total: draft.total,
+      createdAt,
+      eta: new Date(Date.now() + 1000 * 60 * 60 * 24 * 5).toISOString(),
+      paymentStatus: 'Pending',
+      items: draft.lines.map((line) => ({
+        productId: line.productId,
+        name: line.productId,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        subtotal: line.subtotal,
+      })),
+    });
+
+    draft.status = 'submitted';
+    draft.updatedAt = new Date().toISOString();
+    await draft.save();
+
+    this.orderHistoryStore.set(order.id, [
+      {
+        status: 'Submitted',
+        changedAt: createdAt,
+        changedBy: customer.company,
+        note: 'Created from draft',
+      },
+    ]);
+
+    return { message: 'Draft submitted successfully', order: this.cleanOrder(order.toObject()) };
+  }
+
+  async bulkImportOrders(rows: Array<{ sku: string; quantity: number }>) {
+    if (!rows.length) {
+      throw new BadRequestException('At least one row is required');
+    }
+
+    const products = await this.productModel.find().lean();
+    const lineResults = rows.map((row, index) => {
+      const product = products.find((entry) => entry.sku.toLowerCase() === row.sku.toLowerCase());
+
+      if (!product) {
+        return {
+          row: index + 1,
+          sku: row.sku,
+          quantity: row.quantity,
+          valid: false,
+          message: 'SKU not found',
+          lineTotal: 0,
+        };
+      }
+
+      if (!Number.isFinite(row.quantity) || row.quantity <= 0) {
+        return {
+          row: index + 1,
+          sku: row.sku,
+          quantity: row.quantity,
+          valid: false,
+          message: 'Quantity must be greater than 0',
+          lineTotal: 0,
+        };
+      }
+
+      if (row.quantity < product.minOrderQuantity) {
+        return {
+          row: index + 1,
+          sku: row.sku,
+          quantity: row.quantity,
+          valid: false,
+          message: `Quantity must be at least MOQ ${product.minOrderQuantity}`,
+          lineTotal: 0,
+        };
+      }
+
+      const unitPrice = [...product.tierPricing]
+        .sort((a, b) => b.minQty - a.minQty)
+        .find((tier) => row.quantity >= tier.minQty)?.price;
+      const lineTotal = Number((row.quantity * (unitPrice ?? product.price)).toFixed(2));
+
+      return {
+        row: index + 1,
+        sku: row.sku,
+        quantity: row.quantity,
+        valid: true,
+        message: `Accepted (${product.name})`,
+        lineTotal,
+      };
+    });
+
+    const valid = lineResults.filter((entry) => entry.valid);
+    return {
+      validCount: valid.length,
+      invalidCount: lineResults.length - valid.length,
+      summaryTotal: Number(valid.reduce((sum, entry) => sum + entry.lineTotal, 0).toFixed(2)),
+      lineResults,
+    };
+  }
+
+  async upsertProduct(payload: {
+    id?: string;
+    supplierId: string;
+    supplierName: string;
+    name: string;
+    sku: string;
+    category: string;
+    unit: string;
+    origin: string;
+    description: string;
+    image: string;
+    inventory: number;
+    minOrderQuantity: number;
+    price: number;
+  }) {
+    if (!payload.name || !payload.sku || !payload.unit || payload.price <= 0) {
+      throw new BadRequestException('name, sku, unit and price > 0 are required');
+    }
+
+    const duplicate = await this.productModel.findOne({
+      sku: payload.sku,
+      id: { $ne: payload.id },
+    });
+
+    if (duplicate) {
+      throw new BadRequestException('Duplicate SKU is not allowed');
+    }
+
+    if (payload.id) {
+      const updated = await this.productModel.findOneAndUpdate(
+        { id: payload.id },
+        {
+          ...payload,
+          price: Number(payload.price.toFixed(2)),
+        },
+        { new: true },
+      );
+
+      if (!updated) {
+        throw new NotFoundException('Product not found');
+      }
+
+      return { item: this.cleanProduct(updated.toObject()) };
+    }
+
+    const created = await this.productModel.create({
+      id: `prod-${Date.now()}`,
+      name: payload.name,
+      category: payload.category,
+      supplierId: payload.supplierId,
+      supplierName: payload.supplierName,
+      origin: payload.origin,
+      unit: payload.unit,
+      price: Number(payload.price.toFixed(2)),
+      minOrderQuantity: payload.minOrderQuantity,
+      rating: 4.5,
+      reviews: 0,
+      leadTimeDays: 5,
+      certifications: [],
+      inventory: payload.inventory,
+      sku: payload.sku,
+      image: payload.image,
+      description: payload.description,
+      tierPricing: [{ minQty: payload.minOrderQuantity, price: Number(payload.price.toFixed(2)) }],
+    });
+
+    return { item: this.cleanProduct(created.toObject()) };
+  }
+
+  async deleteManagedProduct(productId: string) {
+    const deleted = await this.productModel.findOneAndDelete({ id: productId });
+    if (!deleted) {
+      throw new NotFoundException('Product not found');
+    }
+    return { success: true };
+  }
+
+  async updateProductPricing(payload: {
+    productId: string;
+    basePrice: number;
+    volumeTiers: Array<{ minQty: number; price: number }>;
+    customerOverrides: Array<{ customerId: string; price: number }>;
+  }) {
+    if (payload.basePrice <= 0) {
+      throw new BadRequestException('Base price must be greater than 0');
+    }
+
+    if (!payload.volumeTiers.length) {
+      throw new BadRequestException('At least one volume tier is required');
+    }
+
+    const sorted = [...payload.volumeTiers].sort((a, b) => a.minQty - b.minQty);
+    sorted.forEach((tier, index) => {
+      if (tier.minQty <= 0 || tier.price <= 0) {
+        throw new BadRequestException('Tier quantity and price must be greater than 0');
+      }
+      if (index > 0 && tier.minQty <= sorted[index - 1].minQty) {
+        throw new BadRequestException('Tier thresholds must not overlap');
+      }
+    });
+
+    payload.customerOverrides.forEach((override) => {
+      if (override.price <= 0) {
+        throw new BadRequestException('Override price must be greater than 0');
+      }
+    });
+
+    const product = await this.productModel.findOne({ id: payload.productId });
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    product.price = Number(payload.basePrice.toFixed(2));
+    product.tierPricing = sorted.map((entry) => ({
+      minQty: entry.minQty,
+      price: Number(entry.price.toFixed(2)),
+    }));
+    await product.save();
+
+    return { item: this.cleanProduct(product.toObject()) };
+  }
+
+  async createShipment(payload: {
+    orderId: string;
+    warehouse: string;
+    carrier: string;
+    trackingNumber: string;
+    lineCount: number;
+  }) {
+    const allowedCarriers = ['UPS', 'FEDEX', 'DHL', 'USPS'];
+    if (!allowedCarriers.includes(payload.carrier.toUpperCase())) {
+      throw new BadRequestException(`carrier must be one of: ${allowedCarriers.join(', ')}`);
+    }
+    if (payload.lineCount < 1) {
+      throw new BadRequestException('lineCount must be at least 1');
+    }
+
+    const order = await this.orderModel.findOne({ id: payload.orderId }).lean();
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (payload.lineCount > order.items.length) {
+      throw new BadRequestException('lineCount cannot exceed available order lines');
+    }
+
+    const shipment = await this.shipmentModel.create({
+      id: `SHP-${Date.now()}`,
+      orderId: payload.orderId,
+      warehouse: payload.warehouse,
+      carrier: payload.carrier.toUpperCase(),
+      trackingNumber: payload.trackingNumber,
+      createdAt: new Date().toISOString(),
+      lineCount: payload.lineCount,
+    });
+
+    this.orderHistoryStore.set(order.id, [
+      ...this.getOrCreateOrderHistory(order),
+      {
+        status: 'Shipped',
+        changedAt: shipment.createdAt,
+        changedBy: `${payload.carrier.toUpperCase()} carrier integration`,
+        note: `Tracking ${payload.trackingNumber}`,
+      },
+    ]);
+
+    return this.cleanDocument(shipment.toObject());
+  }
+
+  async getShipments() {
+    const shipments = await this.shipmentModel.find().sort({ createdAt: -1 }).lean();
+    return shipments.map((item) => this.cleanDocument(item));
+  }
+
+  async getSpendingReport(filters: {
+    supplier?: string;
+    category?: string;
+    fromDate?: string;
+    toDate?: string;
+    role?: UserRole;
+    userId?: string;
+  }) {
+    let orders = await this.orderModel.find().lean();
+
+    if (filters.role === 'customer' && filters.userId) {
+      orders = orders.filter((order) => order.customerId === filters.userId);
+    }
+
+    if (filters.supplier) {
+      const supplier = filters.supplier.toLowerCase();
+      orders = orders.filter((order) => order.vendorName.toLowerCase().includes(supplier));
+    }
+
+    if (filters.fromDate) {
+      const from = new Date(filters.fromDate).getTime();
+      if (!Number.isNaN(from)) {
+        orders = orders.filter((order) => new Date(order.createdAt).getTime() >= from);
+      }
+    }
+
+    if (filters.toDate) {
+      const to = new Date(filters.toDate).getTime();
+      if (!Number.isNaN(to)) {
+        orders = orders.filter((order) => new Date(order.createdAt).getTime() <= to + 86399999);
+      }
+    }
+
+    const bySupplier = new Map<string, number>();
+    const byCategory = new Map<string, number>();
+    const byMonth = new Map<string, number>();
+
+    orders.forEach((order) => {
+      bySupplier.set(order.vendorName, Number(((bySupplier.get(order.vendorName) ?? 0) + order.total).toFixed(2)));
+      const month = new Date(order.createdAt).toLocaleString('en-US', { month: 'short' });
+      byMonth.set(month, Number(((byMonth.get(month) ?? 0) + order.total).toFixed(2)));
+    });
+
+    const products = await this.productModel.find().lean();
+    orders.forEach((order) => {
+      order.items.forEach((item) => {
+        const product = products.find((entry) => entry.id === item.productId);
+        const category = product?.category ?? 'Uncategorized';
+        if (!filters.category || category.toLowerCase() === filters.category.toLowerCase()) {
+          byCategory.set(category, Number(((byCategory.get(category) ?? 0) + item.subtotal).toFixed(2)));
+        }
+      });
+    });
+
+    return {
+      totals: {
+        supplier: [...bySupplier.entries()].map(([label, value]) => ({ label, value })),
+        category: [...byCategory.entries()].map(([label, value]) => ({ label, value })),
+        monthly: [...byMonth.entries()].map(([label, value]) => ({ label, value })),
+      },
+      totalSpend: Number(orders.reduce((sum, order) => sum + order.total, 0).toFixed(2)),
+    };
+  }
+
+  async getReorderSuggestions(userId: string) {
+    await this.ensureUser(userId, 'customer');
+    const orders = await this.orderModel.find({ customerId: userId }).lean();
+    const products = await this.productModel.find().lean();
+    const quantityByProduct = new Map<string, number[]>();
+
+    orders.forEach((order) => {
+      order.items.forEach((item) => {
+        const existing = quantityByProduct.get(item.productId) ?? [];
+        quantityByProduct.set(item.productId, [...existing, item.quantity]);
+      });
+    });
+
+    return [...quantityByProduct.entries()].map(([productId, quantities]) => {
+      const product = products.find((entry) => entry.id === productId);
+      const avg = quantities.reduce((sum, qty) => sum + qty, 0) / Math.max(1, quantities.length);
+      return {
+        productId,
+        productName: product?.name ?? productId,
+        supplierName: product?.supplierName ?? 'Unknown supplier',
+        suggestedQuantity: Math.max(Math.round(avg * 1.15), product?.minOrderQuantity ?? 1),
+        confidence: Number(Math.min(0.99, 0.65 + quantities.length * 0.08).toFixed(2)),
+      };
+    });
+  }
+
+  getSubscriptionTiers() {
+    return this.subscriptionTiers;
+  }
+
+  upsertSubscriptionTiers(tiers: SubscriptionTier[]) {
+    if (!tiers.length) {
+      throw new BadRequestException('At least one tier is required');
+    }
+
+    const sorted = [...tiers].sort((a, b) => a.minVolume - b.minVolume);
+    sorted.forEach((tier, index) => {
+      if (!tier.name.trim()) {
+        throw new BadRequestException('Tier name is required');
+      }
+      if (tier.subscriptionFee <= 0 || tier.commissionRate <= 0) {
+        throw new BadRequestException('Tier rates must be greater than 0');
+      }
+      if (tier.maxVolume <= tier.minVolume) {
+        throw new BadRequestException('Tier maxVolume must be greater than minVolume');
+      }
+      if (index > 0 && tier.minVolume <= sorted[index - 1].maxVolume) {
+        throw new BadRequestException('Tier ranges must not overlap');
+      }
+    });
+
+    this.subscriptionTiers = sorted;
+    return this.subscriptionTiers;
+  }
+
+  previewCommission(transactionVolume: number) {
+    if (!Number.isFinite(transactionVolume) || transactionVolume <= 0) {
+      throw new BadRequestException('transactionVolume must be greater than 0');
+    }
+
+    const tier =
+      this.subscriptionTiers.find(
+        (entry) => transactionVolume >= entry.minVolume && transactionVolume <= entry.maxVolume,
+      ) ?? this.subscriptionTiers[this.subscriptionTiers.length - 1];
+    const commissionAmount = Number(((transactionVolume * tier.commissionRate) / 100).toFixed(2));
+
+    return {
+      transactionVolume,
+      subscriptionFee: tier.subscriptionFee,
+      commissionAmount,
+      totalBillable: Number((tier.subscriptionFee + commissionAmount).toFixed(2)),
+      appliedTier: tier.name,
+    };
+  }
+
+  private validateDraftLines(lines: Array<{ productId: string; quantity: number; unitPrice: number }>) {
+    if (!lines.length) {
+      throw new BadRequestException('At least one draft line is required');
+    }
+
+    lines.forEach((line, index) => {
+      if (!line.productId?.trim()) {
+        throw new BadRequestException(`Line ${index + 1}: productId is required`);
+      }
+      if (!Number.isInteger(line.quantity) || line.quantity <= 0) {
+        throw new BadRequestException(`Line ${index + 1}: quantity must be a positive integer`);
+      }
+      if (!Number.isFinite(line.unitPrice) || line.unitPrice <= 0) {
+        throw new BadRequestException(`Line ${index + 1}: unitPrice must be greater than 0`);
+      }
+    });
+  }
+
+  private getOrCreateOrderHistory(order: any) {
+    const existing = this.orderHistoryStore.get(order.id);
+    if (existing) {
+      return existing;
+    }
+
+    const createdAt = new Date(order.createdAt).toISOString();
+    const approvedAt = new Date(new Date(order.createdAt).getTime() + 1000 * 60 * 60 * 6).toISOString();
+    const shippedAt = new Date(new Date(order.createdAt).getTime() + 1000 * 60 * 60 * 24).toISOString();
+    const fallback = [
+      { status: 'Submitted' as const, changedAt: createdAt, changedBy: order.customerName },
+      { status: 'Approved' as const, changedAt: approvedAt, changedBy: order.vendorName },
+      { status: 'Shipped' as const, changedAt: shippedAt, changedBy: `${order.vendorName} Warehouse` },
+      { status: 'Delivered' as const, changedAt: order.eta, changedBy: 'Carrier POD' },
+    ];
+    this.orderHistoryStore.set(order.id, fallback);
+    return fallback;
+  }
+
+  private cleanDocument(doc: any) {
+    const { _id, __v, createdAt, updatedAt, ...rest } = doc;
+    return rest;
   }
 
   private toAuthPayload(user: Pick<User, 'id' | 'role' | 'name' | 'company' | 'email' | 'phone' | 'location' | 'approved'>) {

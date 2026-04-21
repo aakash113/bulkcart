@@ -8,6 +8,55 @@
     </div>
   </section>
 
+  @if (notice()) {
+    <p class="notice-banner">{{ notice() }}</p>
+  }
+
+  <section class="panel-card">
+    <h2>Search and filter orders</h2>
+    <div class="filter-grid">
+      <label>
+        Supplier
+        <input
+          [ngModel]="filters().supplier ?? ''"
+          (ngModelChange)="setFilter('supplier', $event)"
+          placeholder="Harbor Foods"
+        />
+      </label>
+      <label>
+        Status
+        <select [ngModel]="filters().status ?? ''" (ngModelChange)="setFilter('status', $event)">
+          <option value="">All statuses</option>
+          <option value="Pending">Pending</option>
+          <option value="Approved">Approved</option>
+          <option value="Packed">Packed</option>
+          <option value="In Transit">In Transit</option>
+          <option value="Delivered">Delivered</option>
+        </select>
+      </label>
+      <label>
+        Order ID
+        <input
+          [ngModel]="filters().orderId ?? ''"
+          (ngModelChange)="setFilter('orderId', $event)"
+          placeholder="ORD-10021"
+        />
+      </label>
+      <label>
+        From date
+        <input type="date" [ngModel]="filters().dateFrom ?? ''" (ngModelChange)="setFilter('dateFrom', $event)" />
+      </label>
+      <label>
+        To date
+        <input type="date" [ngModel]="filters().dateTo ?? ''" (ngModelChange)="setFilter('dateTo', $event)" />
+      </label>
+    </div>
+    <div class="action-row">
+      <button type="button" class="action-btn" (click)="applyFilters()">Apply filters</button>
+      <button type="button" class="ghost-btn" (click)="resetFilters()">Reset</button>
+    </div>
+  </section>
+
   @if (orders(); as ordersData) {
     @if (ordersData.items.length) {
       <section class="summary-grid">
@@ -71,4 +120,107 @@
       </section>
     }
   }
+
+  <section class="panel-card">
+    <h2>Order status timeline and history</h2>
+    <div class="history-row">
+      <input [ngModel]="historyOrderId()" (ngModelChange)="historyOrderId.set($event)" placeholder="Enter order ID (for example ORD-10021)" />
+      <button type="button" class="action-btn" (click)="loadHistory()">Load history</button>
+    </div>
+
+    @if (historyData(); as history) {
+      <div class="timeline">
+        @for (stage of history.history; track stage.status + stage.changedAt) {
+          <article>
+            <strong>{{ stage.status }}</strong>
+            <span>{{ stage.changedAt | date: 'medium' }} · {{ stage.changedBy }}</span>
+            @if (stage.note) {
+              <p>{{ stage.note }}</p>
+            }
+          </article>
+        }
+      </div>
+    }
+  </section>
+
+  <section class="panel-card">
+    <h2>Order drafts and editing</h2>
+    <div class="filter-grid">
+      <label>
+        Supplier
+        <input
+          [ngModel]="draftForm().supplier"
+          (ngModelChange)="setDraftSupplier($event)"
+        />
+      </label>
+    </div>
+
+    <div class="draft-grid">
+      @for (line of draftForm().lines; track $index) {
+        <div class="draft-line">
+          <input
+            [ngModel]="line.productId"
+            (ngModelChange)="setDraftLineValue($index, 'productId', $event)"
+            placeholder="Product ID"
+          />
+          <input
+            type="number"
+            min="1"
+            [ngModel]="line.quantity"
+            (ngModelChange)="setDraftLineValue($index, 'quantity', $event)"
+            placeholder="Qty"
+          />
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            [ngModel]="line.unitPrice"
+            (ngModelChange)="setDraftLineValue($index, 'unitPrice', $event)"
+            placeholder="Unit price"
+          />
+          <button type="button" class="ghost-btn" (click)="removeDraftLine($index)">Remove</button>
+        </div>
+      }
+    </div>
+
+    <div class="action-row">
+      <button type="button" class="ghost-btn" (click)="addDraftLine()">Add line</button>
+      <strong>Total {{ draftTotal() | currency }}</strong>
+      <button type="button" class="action-btn" (click)="saveDraft()">Save draft</button>
+      <button type="button" class="action-btn" (click)="submitDraft()">Submit draft</button>
+    </div>
+  </section>
+
+  <section class="panel-card">
+    <h2>Bulk order processing</h2>
+    <p class="helper">Paste CSV rows in the format: <code>SKU,quantity</code>. Example: <code>GRA-001,20</code></p>
+    <textarea [ngModel]="bulkRowsText()" (ngModelChange)="bulkRowsText.set($event)" rows="5"></textarea>
+    <div class="action-row">
+      <button type="button" class="action-btn" (click)="runBulkValidation()">Validate bulk file</button>
+    </div>
+    @if (bulkResult(); as result) {
+      <div class="summary-grid compact">
+        <article>
+          <strong>{{ result.validCount }}</strong>
+          <span>Valid rows</span>
+        </article>
+        <article>
+          <strong>{{ result.invalidCount }}</strong>
+          <span>Invalid rows</span>
+        </article>
+        <article>
+          <strong>{{ result.summaryTotal | currency }}</strong>
+          <span>Summary total</span>
+        </article>
+      </div>
+      <div class="bulk-lines">
+        @for (line of result.lineResults; track line.row) {
+          <div [class.invalid]="!line.valid">
+            <strong>Row {{ line.row }} · {{ line.sku }}</strong>
+            <span>{{ line.message }} @if (line.valid) { · {{ line.lineTotal | currency }} }</span>
+          </div>
+        }
+      </div>
+    }
+  </section>
 </div>

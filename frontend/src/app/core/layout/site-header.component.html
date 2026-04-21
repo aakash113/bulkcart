@@ -37,6 +37,9 @@
       <nav class="nav-links">
         <a routerLink="/catalog">Catalog</a>
         <a routerLink="/orders">Orders</a>
+        @if (user()?.role !== 'customer') {
+          <a routerLink="/operations">Operations</a>
+        }
         @if (user()?.role === 'customer') {
           <a routerLink="/cart">Cart</a>
         }
