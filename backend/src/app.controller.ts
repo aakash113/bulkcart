@@ -331,9 +331,9 @@ export class AppController {
 
   @Get('reports/reorder-suggestions')
   getReorderSuggestions(@Query() query: Record<string, string | undefined>) {
-    const userId = query.userId;
+    const userId = query.userId ?? query.customerId;
     if (!userId) {
-      throw new BadRequestException('userId is required');
+      throw new BadRequestException('userId (or customerId) is required');
     }
     return this.appService.getReorderSuggestions(userId);
   }
@@ -367,9 +367,9 @@ export class AppController {
 
   @Get('billing/commission-preview')
   previewCommission(@Query() query: Record<string, string | undefined>) {
-    const transactionVolumeRaw = query.transactionVolume;
+    const transactionVolumeRaw = query.transactionVolume ?? query.monthlyGMV;
     if (!transactionVolumeRaw) {
-      throw new BadRequestException('transactionVolume is required');
+      throw new BadRequestException('transactionVolume (or monthlyGMV) is required');
     }
     const transactionVolume = Number(transactionVolumeRaw);
     if (!Number.isFinite(transactionVolume) || transactionVolume <= 0) {
