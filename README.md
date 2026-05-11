@@ -199,5 +199,4 @@ If vendor cannot log in:
 
 - Frontend is configured to use real backend APIs (no dummy/fallback API mode).
 - Customer dashboard is separate from vendor/admin dashboard by route and component.
-- Operations route is restricted to Vendor/Admin only.commit
-- 
+- Operations route is restricted to Vendor/Admin only.
