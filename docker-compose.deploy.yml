@@ -18,6 +18,8 @@ services:
       - mongo
     environment:
       MONGO_URI: mongodb://mongo:27017/bulkcart_dev
+      USE_IN_MEMORY_DB: "false"
+      NODE_ENV: production
       PORT: 3000
     ports:
       - "3000:3000"

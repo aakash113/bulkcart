@@ -22,10 +22,9 @@ let memoryMongo: MongoMemoryServer | null = null;
       inject: [ConfigService],
       useFactory: async (config: ConfigService) => {
         const configuredUri = config.get<string>('MONGO_URI');
+        const useInMemoryFlag = config.get<string>('USE_IN_MEMORY_DB');
         const useInMemory =
-          config.get<string>('USE_IN_MEMORY_DB') === 'true' ||
-          !configuredUri ||
-          configuredUri.includes('mongo:27017');
+          useInMemoryFlag === 'true' || (!configuredUri && config.get<string>('NODE_ENV') !== 'production');
 
         const uri = useInMemory
           ? await (async () => {
